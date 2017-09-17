@@ -7,21 +7,14 @@
  * Contents:
  * 	 1. A(r) & r(x)
  *   2. ideal()
- *	 3.	iapws()    
+ *	 3.	iapws() 
+ *	 4. main()   
  * Author: Jiasheng(Jason) Liang
  * Version:
  */
 import std.stdio;
 import std.math;
 import IAPWS_local;
-
-// import local IAPWS database
-/*void main()
-{
-	writeln("importing IAPWS_local.d...");	
-	assert(IAPWS_local.R==461.526);
-	writeln("local IAPWS database is imported...");
-}*/
 
 //-------------------------------------------------------------------------------
 //PART 1. Functions to return the inner surface radius and cross-section area 
@@ -174,4 +167,18 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	phy_var = [x_new, A_new, V_new]; thermo_var = [p_new, T_new];
 
 	return [phy_var,thermo_var]; 
+}
+
+//-------------------------------------------------------------------------------
+//PART 4. main() to execute functions and generate results 
+//-------------------------------------------------------------------------------
+void main(){
+	double x_delta; 
+	
+	writeln("importing IAPWS_local.d...");	
+	assert(IAPWS_local.R==461.526);
+	writeln("local IAPWS database is imported...");
+	write("step size of x in mm:");
+	readf("%f", &x_delta);
+	writeln(10*x_delta);
 }

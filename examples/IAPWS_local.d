@@ -16,7 +16,6 @@
  * Author: Jiasheng(Jason) Liang
  * Version:
  */
-module IAPWS_local;
 
 import std.stdio;
 import std.math;
@@ -1626,4 +1625,3 @@ public:
     } // end ThermalConductivity   
 } // end class IAPWS
 
-void main(){}
