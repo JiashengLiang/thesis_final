@@ -161,12 +161,13 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 			{
 				if(f(p_new,T_0)<0)
 				{
+					h = abs(h);
 					if(f(p_new,T_0+h)<0) {h*=2;}
 					else				 {h/=2;}
 				}
 				else if(f(p_new,T_0)>0)
 				{
-					h*=-1;
+					h =-abs(h);
 					if(f(p_new,T_0+h)>0) {h*=2;}
 					else				 {h/=2;}
 				}
@@ -175,12 +176,13 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 			{
 				if(f(p_new,T_0)<0)
 				{
-					h*=-1;
+					h =-abs(h);
 					if(f(p_new,T_0+h)>0) {h/=2;}
 					else				 {h*=2;}
 				}
 				else if(f(p_new,T_0)>0)
 				{
+					h=abs(h);
 					if(f(p_new,T_0+h)<0) {h/=2;}
 					else				 {h*=2;}
 				}
@@ -218,13 +220,8 @@ void main(){
 	File iapws_data = File("isentropic_nozzle_iapws.txt", "w");
 	iapws_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
 	
-	double delta_x; //step size [mm]
-	
 	assert(_IAPWS.R==461.526);
 	writeln("local IAPWS database is imported...");
-	
-	//inputs
-	write("step size of x in mm:");readf("%f", &delta_x);
 
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
@@ -236,16 +233,14 @@ void main(){
 	
 	//stepping along typical x
 	double[] x_set=[5,6,6.65,7.3,7.6,7.9,8.05,8.2,8.35,8.45,8.55,8.7,8.85,9,9.3,9.6,
-					9.95]; 
-	//stepping along x-axis
-	while(ideal_var[0][0]<67.95)
-	{	
+					9.95];
+	for(int i=0; i<x_set.length; ++i){
 		iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
-		iapws_var = iapws(iapws_phy,iapws_thermo, delta_x);
+		iapws_var = iapws(iapws_phy,iapws_thermo, x_set[i+1]-x_set[i]);
 		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
 							" ",iapws_var[1][0]," ",iapws_var[1][1]);
 		ideal_phy = ideal_var[0]; ideal_thermo = ideal_var[1];
-		ideal_var = ideal(ideal_phy,ideal_thermo, delta_x);
+		ideal_var = ideal(ideal_phy,ideal_thermo, x_set[i+1]-x_set[i]);
 		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
 		writeln("processing... step up to x=", ideal_var[0][0]);
