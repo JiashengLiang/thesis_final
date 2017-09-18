@@ -107,8 +107,8 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 //		  to return a set of updated variables after a step in horizontal
 //		  location (delta_x [mm]) is taken 
 //-------------------------------------------------------------------------------
-double h0_old = 2.7201154e6 + (30.62983^^2)/2;	/// Specific stagnation enthalpy 
-												/// at inlet [J/kg]
+double s_old = 7.0269068e3;	/// Specific entropy of the inlet state [J/kg K]
+
 double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
 	assert(_IAPWS.R); 							/// specific gas constant[J/kg/K]
@@ -154,7 +154,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		}
 		double f(double p, double T){
 			_IAPWS.IAPWS guess = new _IAPWS.IAPWS(p, T, 1); 		///assume always be gas
-			return guess.h-(h0_old-(V_new^^2)/2);
+			return guess.s-s_old;
 		}
 		double dfdT(double p, double T){
 			/* use 2-point central finite difference to differentiate f(p,T)*/
@@ -170,7 +170,9 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		//--local variables for iteration
 		double T_1;	//next T
 		int i=0; //iteration number
-		while(abs(f_new)>=1 && i<50){ //maximum iterations  
+		//take the percentage uncertainty of isobaric enthalpy calbulated using basic 
+		//equations as the iteration tolerance wtih 30 maximum iterations  
+		while(abs(f_new)>=0.002*s_old && i<50){
 			//considering saturation boundary
 			T_1 = checkT(p_new, T_0+h); h = T_1 - T_0;
 			//calculate suitable step size for each iteration 
@@ -226,9 +228,9 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 void main(){
 	//construct the txt files at which the simulation data will be store
 	File ideal_data = File("isentropic_nozzle_ideal.txt", "w");
-	ideal_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
+	ideal_data.writeln("[x[mm], Area[m^2], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
 	File iapws_data = File("isentropic_nozzle_iapws.txt", "w");
-	iapws_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
+	iapws_data.writeln("[x[mm], Area[m^2], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
 	
 	double delta_x; //step size [mm]
 	double _delta_x; //local step size within the iteration loop, step maybe differ
@@ -243,15 +245,16 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-	double[][] ideal_var = [[5.81, A(5.81), 33.4176],[269867, 403.104]];
+	double[][] ideal_var = [[5, A(5), 30.62983],[270e3, 403.15]];
 	double[][] iapws_var = ideal_var;
 	double[] ideal_phy,ideal_thermo,iapws_phy,iapws_thermo;
 	writeln("Inlet conditions:", ideal_var);
 	
 	//stepping along x-axis
-	while(ideal_var[0][0]<67.95)
+	while(ideal_var[0][0]<67.5)
 	{
-		if(ideal_var[0][0]>=6.55 && ideal_var[0][0]<10) //smaller step for the segment with sudden area change 
+		if(ideal_var[0][0]>6 && ideal_var[0][0]<10) //smaller step for the segment with
+													// sudden area change 
 		{
 			_delta_x = 0.02*delta_x;
 		}
