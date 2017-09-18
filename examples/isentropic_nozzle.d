@@ -107,10 +107,12 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 //		  to return a set of updated variables after a step in horizontal
 //		  location (delta_x [mm]) is taken 
 //-------------------------------------------------------------------------------
+double h0_old = 2.7201154e6 + (30.62983^^2)/2;	/// Specific stagnation enthalpy 
+												/// at inlet [J/kg]
 double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
-	assert(_IAPWS.R); 						/// specific gas constant[J/kg/K]
-	//File logs=File("log.txt", "a"); 
+	assert(_IAPWS.R); 							/// specific gas constant[J/kg/K]
+	File logs=File("log.txt", "a"); 
 	//initial physical variables 
 	double x_old = phy_var[0];					/// horizontal location [mm]
 	double A_old = phy_var[1];					/// cross-section area [m^2]
@@ -120,10 +122,10 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	double T_old = thermo_var[1];				/// temperature [K]
 
 	//local IAPWS equations of state
-	_IAPWS.IAPWS iapws_old = new _IAPWS.IAPWS(p_old, T_old, 1);/// an object of class IAPWS
+	_IAPWS.IAPWS iapws_old = new _IAPWS.IAPWS(p_old, T_old, 1);
+												/// an object of class IAPWS
 	double rho = iapws_old.rho;					/// Density [kg/m^3]
 	double M = V_old/iapws_old.a;				/// Mach number	
-	double h_old = 2.7201154e6;					/// Specific enthalpy at inlet [J/kg]
 
 	//update variables
 	//--x
@@ -143,37 +145,46 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		* Use 1D Bisection Method to find the T_new such that:
 		* 	h(p_new, T_new) - h_old = 0	= f(p_new, T_new)  
 		*/
+		double checkT(double p, double T){
+			/* function to reset T if (p,T) has acrossed saturation
+			*  boundary
+			*/
+			if(T<_IAPWS.get_Ts(p))  {T=_IAPWS.get_Ts(p);}
+			return T;
+		}
 		double f(double p, double T){
 			_IAPWS.IAPWS guess = new _IAPWS.IAPWS(p, T, 1); 		///assume always be gas
-			return guess.h-h_old;
+			return guess.h-(h0_old-(V_new^^2)/2);
 		}
 		double dfdT(double p, double T){
 			/* use 2-point central finite difference to differentiate f(p,T)*/
-			double _h = 1e-3;
-			return (f(p, T+_h)-f(p, T-_h))/(2*_h);
+			double T0 = checkT(p,T-5e-4); double T1= checkT(p,T+5e-4);
+			return (f(p, T1)-f(p, T0))/(T1-T0);
 		}
 		
 		//update Temperature
-		double T_0 = T_old; //T remains the same if there is no Area change 
-							  //and f_new = 0
-		//initial guess 
-		double h = 5e-4; //step in temperature
+		double T_0 = checkT(p_new, T_old); 
+		//--initial guess 
+		double h = 1e-3; //step in temperature
 		double f_new = f(p_new, T_0);
-		int i=0;			  //iteration number
-		while(abs(f_new)>=1e3 && i<30){ //entropy tolerance 10 [J/kg K]
-										 //maximum iterations  
+		//--local variables for iteration
+		double T_1;	//next T
+		int i=0; //iteration number
+		while(abs(f_new)>=1 && i<50){ //maximum iterations  
+			//considering saturation boundary
+			T_1 = checkT(p_new, T_0+h); h = T_1 - T_0;
 			//calculate suitable step size for each iteration 
 			if(dfdT(p_new,T_0)>0)
 			{
 				if(f(p_new,T_0)<0)
 				{
-					if(f(p_new,T_0+h)<0) {h*=2;}
+					if(f(p_new,T_1)<0) {h*=2;}
 					else				 {h/=2;}
 				}
 				else if(f(p_new,T_0)>0)
 				{
 					h*=-1;
-					if(f(p_new,T_0+h)>0) {h*=2;}
+					if(f(p_new,T_1)>0) {h*=2;}
 					else				 {h/=2;}
 				}
 			}
@@ -182,28 +193,23 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 				if(f(p_new,T_0)<0)
 				{
 					h*=-1;
-					if(f(p_new,T_0+h)>0) {h/=2;}
+					if(f(p_new,T_1)>0) {h/=2;}
 					else				 {h*=2;}
 				}
 				else if(f(p_new,T_0)>0)
 				{
-					if(f(p_new,T_0+h)<0) {h/=2;}
+					if(f(p_new,T_1)<0) {h/=2;}
 					else				 {h*=2;}
 				}
 			}
 
 			//prepare for next iteration
-			T_0+=h;
-			//--if the updated T has acrossed the saturation boundary
-			if(T_0 < _IAPWS.get_Ts(p_new))
-			{
-				T_0 = _IAPWS.get_Ts(p_new);
-			}
+			T_0 = T_1;
 			f_new = f(p_new,T_0);
 			i+=1;
-			//logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
+			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
 		}
-		//logs.close();
+		logs.close();
 		return T_0;
 	}
 	double T_new = Bisection();
@@ -225,6 +231,8 @@ void main(){
 	iapws_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
 	
 	double delta_x; //step size [mm]
+	double _delta_x; //local step size within the iteration loop, step maybe differ
+					 //to what the user assigned 
 	
 	assert(_IAPWS.R==461.526);
 	writeln("local IAPWS database is imported...");
@@ -235,7 +243,7 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-	double[][] ideal_var = [[5, A(5), 30.62983],[270e3, 403.15]];
+	double[][] ideal_var = [[5.81, A(5.81), 33.4176],[269867, 403.104]];
 	double[][] iapws_var = ideal_var;
 	double[] ideal_phy,ideal_thermo,iapws_phy,iapws_thermo;
 	writeln("Inlet conditions:", ideal_var);
@@ -243,12 +251,20 @@ void main(){
 	//stepping along x-axis
 	while(ideal_var[0][0]<67.95)
 	{
+		if(ideal_var[0][0]>=6.55 && ideal_var[0][0]<10) //smaller step for the segment with sudden area change 
+		{
+			_delta_x = 0.02*delta_x;
+		}
+		else
+		{
+			_delta_x = delta_x;
+		}
 		iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
-		iapws_var = iapws(iapws_phy,iapws_thermo, delta_x);
+		iapws_var = iapws(iapws_phy,iapws_thermo, _delta_x);
 		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
 							" ",iapws_var[1][0]," ",iapws_var[1][1]);
 		ideal_phy = ideal_var[0]; ideal_thermo = ideal_var[1];
-		ideal_var = ideal(ideal_phy,ideal_thermo, delta_x);
+		ideal_var = ideal(ideal_phy,ideal_thermo, _delta_x);
 		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
 		writeln("processing... step up to x=", ideal_var[0][0]);
