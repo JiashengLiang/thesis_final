@@ -139,7 +139,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 
 		double f(double p, double T){
 			_IAPWS.IAPWS guess = new _IAPWS.IAPWS(p, T, 1); 		///assume always be gas
-			return guess.s-s_old;
+			return (guess.s - s_old);
 		}
 		double dfdT(double p, double T){
 			/* use 2-point central finite difference to differentiate f(p,T)*/
@@ -151,10 +151,10 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		double T_0 = T_old; //T remains the same if there is no Area change 
 							//and f_new = 0
 		//initial guess 
-		double h = 5e-4; //step in temperature
+		double h = 5e-5; //step in temperature
 		double f_new = f(p_new, T_0);
 		int i=0;			  //iteration number
-		while(abs(f_new)>=0.1 && i<30){ //entropy tolerance 10 [J/kg K]
+		while(abs(f_new)>0.002*s_old && i<30){ //entropy tolerance 10 [J/kg K]
 										 //maximum iterations  
 			//calculate suitable step size for each iteration 
 			if(dfdT(p_new,T_0)>0)
@@ -198,9 +198,20 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	}
 	double T_new = Bisection();
 	//--if the updated T has acrossed the saturation boundary
-	if(T_new < _IAPWS.get_Ts(p_new))
+	while(T_new < _IAPWS.get_Ts(p_new) || p_new > _IAPWS.get_ps(T_new))
 	{
-		T_new = _IAPWS.get_Ts(p_new);
+		if(T_new < _IAPWS.get_Ts(p_new))
+		{
+			//make sure the updated state is suifficiently far away from saturation 
+			//boundary
+			T_new = _IAPWS.get_Ts(p_new) + (_IAPWS.get_Ts(p_new)-T_new)/2;
+			writeln("adjust T_new"); 
+		}
+		else if(p_new > _IAPWS.get_ps(T_new))
+		{
+			p_new = _IAPWS.get_ps(T_new) - (p_new-_IAPWS.get_ps(T_new))/2;
+			writeln("adjust p_new");
+		}	
 	}
 
 	//update variable lists
@@ -214,9 +225,9 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 //-------------------------------------------------------------------------------
 void main(){
 	//construct the txt files at which the simulation data will be store
-	File ideal_data = File("isentropic_nozzle_ideal.txt", "a");
+	File ideal_data = File("isentropic_nozzle_ideal.txt", "w");
 	ideal_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
-	File iapws_data = File("isentropic_nozzle_iapws.txt", "a");
+	File iapws_data = File("isentropic_nozzle_iapws.txt", "w");
 	iapws_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
 	
 	assert(_IAPWS.R==461.526);
@@ -225,27 +236,28 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-	double[][] ideal_var = [[8.55, A(8.55), 129.991],[260054, 399.602]];
-	double[][] iapws_var = [[8.55, A(8.55), 130.076],[259739, 401.827]];
-	int x_i = 10;
-	double[] ideal_phy,ideal_thermo,iapws_phy,iapws_thermo;
-	writeln("Inlet conditions:", ideal_var);
-	
-	//stepping along typical x
-	double[] x_set=[5,6,6.65,7.3,7.6,7.9,8.05,8.2,8.35,8.45,8.55,8.7,8.85,9,9.3,9.6,
-					9.95];
-	
-	iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
-	iapws_var = iapws(iapws_phy,iapws_thermo, x_set[x_i+1]-x_set[x_i]);
-	iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
-							" ",iapws_var[1][0]," ",iapws_var[1][1]);
+	double[][] init_var = [[5,A(5),30.62983],[270e3,403.15]];
+	double[][] ideal_var = init_var;
+	double[][] iapws_var = init_var;
 
-	ideal_phy = ideal_var[0]; ideal_thermo = ideal_var[1];
-	ideal_var = ideal(ideal_phy,ideal_thermo, x_set[x_i+1]-x_set[x_i]);
-	ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
-							" ", ideal_var[1][0]," ",ideal_var[1][1]);
+	writeln("Inlet conditions:", init_var);
+
+	double delta_x;
+	write("Step size of x in mm:");readf("%f", &delta_x);
 	
-	writeln("outlet conditions:ideal:", ideal_var, "iapws:",iapws_var);
+	//stepping along x-axis
+	while(iapws_var[0][0]<67.949)
+	{
+		iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
+		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
+							" ",iapws_var[1][0]," ",iapws_var[1][1]);
+		ideal_var = ideal(ideal_var[0], ideal_var[1], delta_x);
+		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
+							" ", ideal_var[1][0]," ",ideal_var[1][1]);
+		writeln("Processing...up to x = ", iapws_var[0][0]);
+	}
+	
+	writeln("outlet conditions:ideal:", ideal_var, ", iapws:",iapws_var);
 	//close txt files
 	iapws_data.close(); ideal_data.close();
 }
