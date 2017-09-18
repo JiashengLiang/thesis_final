@@ -31,24 +31,24 @@ double r(double x){
 	{
 		return 5;
 	}
-	else if(5<x && x<6.65)
+	else if(5<x && x<=6.65)
 	{
 		r = sqrt(abs(1.65^^2-(x-5)^^2))+3.35;
 		return r;
 	}
-	else if(6.65<x && x<8.45)
+	else if(6.65<x && x<=8.45)
 	{
 		r = -sqrt(abs(1.8^^2-(x-8.45)^^2))+3.35;
 		return r;
 	}
-	else if(x==6.65) //infinite gradient
+	/*else if(x==6.65) //infinite gradient
 	{
 		return 3.35;
 	}
 	else if(x==8.45) //zero gradient
 	{
 		return 1.55;
-	}
+	}*/
 	else
 	{
 		r = tan(PI*5/180)*(x-8.45)+1.55;
@@ -149,7 +149,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 			/* function to reset T if (p,T) has acrossed saturation
 			*  boundary
 			*/
-			if(T<_IAPWS.get_Ts(p))  {T=_IAPWS.get_Ts(p);}
+			if(T<_IAPWS.get_Ts(p))  {return _IAPWS.get_Ts(p);}
 			return T;
 		}
 		double f(double p, double T){
@@ -172,7 +172,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		int i=0; //iteration number
 		//take the percentage uncertainty of isobaric enthalpy calbulated using basic 
 		//equations as the iteration tolerance wtih 30 maximum iterations  
-		while(abs(f_new)>=0.002*s_old && i<50){
+		while(abs(f_new)>=0.01*s_old && i<35){
 			//considering saturation boundary
 			T_1 = checkT(p_new, T_0+h); h = T_1 - T_0;
 			//calculate suitable step size for each iteration 
@@ -226,6 +226,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 //PART 4. main() to execute functions and generate results 
 //-------------------------------------------------------------------------------
 void main(){
+	// [TODO] Temperature didn't converge 
 	//construct the txt files at which the simulation data will be store
 	File ideal_data = File("isentropic_nozzle_ideal.txt", "w");
 	ideal_data.writeln("[x[mm], Area[m^2], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
@@ -251,12 +252,12 @@ void main(){
 	writeln("Inlet conditions:", ideal_var);
 	
 	//stepping along x-axis
-	while(ideal_var[0][0]<67.5)
+	while(ideal_var[0][0]<67.95)
 	{
 		if(ideal_var[0][0]>6 && ideal_var[0][0]<10) //smaller step for the segment with
 													// sudden area change 
 		{
-			_delta_x = 0.02*delta_x;
+			_delta_x = 0.05*delta_x;
 		}
 		else
 		{
@@ -271,9 +272,7 @@ void main(){
 		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
 		writeln("processing... step up to x=", ideal_var[0][0]);
-	} 
+	}  
 	//close txt files
-	/*iapws_data.close(); ideal_data.close();
-	_IAPWS.IAPWS guess = new _IAPWS.IAPWS(270e3, 403.15, 1);
-	writef("%.8f",guess.h);*/
+	iapws_data.close(); ideal_data.close();
 }
