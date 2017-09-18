@@ -110,7 +110,7 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
 	assert(_IAPWS.R); 						/// specific gas constant[J/kg/K]
-	File logs=File("log.txt", "a"); 
+	//File logs=File("log.txt", "a"); 
 	//initial physical variables 
 	double x_old = phy_var[0];					/// horizontal location [mm]
 	double A_old = phy_var[1];					/// cross-section area [m^2]
@@ -201,10 +201,9 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 			}
 			f_new = f(p_new,T_0);
 			i+=1;
-			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
-			writeln("processing... at x=", x_new);
+			//logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
 		}
-		logs.close();
+		//logs.close();
 		return T_0;
 	}
 	double T_new = Bisection();
@@ -252,6 +251,7 @@ void main(){
 		ideal_var = ideal(ideal_phy,ideal_thermo, delta_x);
 		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
+		writeln("processing... step up to x=", ideal_var[0][0]);
 	} 
 	//close txt files
 	/*iapws_data.close(); ideal_data.close();
