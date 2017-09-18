@@ -234,18 +234,12 @@ void main(){
 	double[] ideal_phy,ideal_thermo,iapws_phy,iapws_thermo;
 	writeln("Inlet conditions:", ideal_var);
 	
+	//stepping along typical x
+	double[] x_set=[5,6,6.65,7.3,7.6,7.9,8.05,8.2,8.35,8.45,8.55,8.7,8.85,9,9.3,9.6,
+					9.95]; 
 	//stepping along x-axis
 	while(ideal_var[0][0]<67.95)
 	{	
-		/*//adjust step size in the segments with sudden area change
-		if(ideal_var[0][0]>6 && ideal_var[0][0]<10.5)
-		{
-			_delta_x = 1e-3*delta_x;	
-		}
-		else
-		{
-			_delta_x = delta_x;
-		}*/
 		iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
 		iapws_var = iapws(iapws_phy,iapws_thermo, delta_x);
 		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
