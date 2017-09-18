@@ -1,0 +1,22 @@
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+6 6.8293e-05 34.6419 269816 403.095
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+6.65 3.52565e-05 51.4854 268944 402.987
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+7.3 1.21336e-05 85.6353 266324 402.66
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+7.6 9.76833e-06 102.864 264146 402.387
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+7.9 8.40935e-06 117.847 261888 402.101
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+8.05 7.99236e-06 124.056 260825 401.966
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+8.2 7.71853e-06 128.603 260008 401.862
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+8.35 7.57477e-06 131.179 259530 401.801
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+8.45 7.54768e-06 131.685 259434 401.788
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+8.55 7.63312e-06 130.076 259739 401.827
+[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]
+8.7 7.76219e-06 127.706 260184 401.884

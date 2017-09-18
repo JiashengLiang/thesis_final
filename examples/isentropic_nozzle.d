@@ -194,7 +194,6 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 			i+=1;
 			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
 		}
-		logs.close();
 		return T_0;
 	}
 	double T_new = Bisection();
@@ -215,9 +214,9 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 //-------------------------------------------------------------------------------
 void main(){
 	//construct the txt files at which the simulation data will be store
-	File ideal_data = File("isentropic_nozzle_ideal.txt", "w");
+	File ideal_data = File("isentropic_nozzle_ideal.txt", "a");
 	ideal_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
-	File iapws_data = File("isentropic_nozzle_iapws.txt", "w");
+	File iapws_data = File("isentropic_nozzle_iapws.txt", "a");
 	iapws_data.writeln("[x[mm], Area[m], Velocity[m/s]],[Pressure[Pa], Temperature[K]]");
 	
 	assert(_IAPWS.R==461.526);
@@ -226,25 +225,27 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-	double[][] ideal_var = [[5, A(5), 30.62983],[270e3, 403.15]];
-	double[][] iapws_var = ideal_var;
+	double[][] ideal_var = [[8.55, A(8.55), 129.991],[260054, 399.602]];
+	double[][] iapws_var = [[8.55, A(8.55), 130.076],[259739, 401.827]];
+	int x_i = 10;
 	double[] ideal_phy,ideal_thermo,iapws_phy,iapws_thermo;
 	writeln("Inlet conditions:", ideal_var);
 	
 	//stepping along typical x
 	double[] x_set=[5,6,6.65,7.3,7.6,7.9,8.05,8.2,8.35,8.45,8.55,8.7,8.85,9,9.3,9.6,
 					9.95];
-	for(int i=0; i<x_set.length; ++i){
-		iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
-		iapws_var = iapws(iapws_phy,iapws_thermo, x_set[i+1]-x_set[i]);
-		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
+	
+	iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
+	iapws_var = iapws(iapws_phy,iapws_thermo, x_set[x_i+1]-x_set[x_i]);
+	iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
 							" ",iapws_var[1][0]," ",iapws_var[1][1]);
-		ideal_phy = ideal_var[0]; ideal_thermo = ideal_var[1];
-		ideal_var = ideal(ideal_phy,ideal_thermo, x_set[i+1]-x_set[i]);
-		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
+
+	ideal_phy = ideal_var[0]; ideal_thermo = ideal_var[1];
+	ideal_var = ideal(ideal_phy,ideal_thermo, x_set[x_i+1]-x_set[x_i]);
+	ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
-		writeln("processing... step up to x=", ideal_var[0][0]);
-	} 
+	
+	writeln("outlet conditions:ideal:", ideal_var, "iapws:",iapws_var);
 	//close txt files
 	iapws_data.close(); ideal_data.close();
 }
