@@ -31,23 +31,15 @@ double r(double x){
 	{
 		return 5;
 	}
-	else if(5<x && x<6.65)
+	else if(5<x && x<=6.65)
 	{
 		r = sqrt(abs(1.65^^2-(x-5)^^2))+3.35;
 		return r;
 	}
-	else if(6.65<x && x<8.45)
+	else if(6.65<x && x<=8.45)
 	{
 		r = -sqrt(abs(1.8^^2-(x-8.45)^^2))+3.35;
 		return r;
-	}
-	else if(x==6.65) //infinite gradient
-	{
-		return 3.35;
-	}
-	else if(x==8.45) //zero gradient
-	{
-		return 1.55;
 	}
 	else
 	{
@@ -107,10 +99,12 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 //		  to return a set of updated variables after a step in horizontal
 //		  location (delta_x [mm]) is taken 
 //-------------------------------------------------------------------------------
+double s_old = 7026.906765;					/// Specific entropy at inlet [J/kg K]
+
 double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
 	assert(_IAPWS.R); 						/// specific gas constant[J/kg/K]
-	//File logs=File("log.txt", "a"); 
+	File logs=File("log.txt", "a"); 
 	//initial physical variables 
 	double x_old = phy_var[0];					/// horizontal location [mm]
 	double A_old = phy_var[1];					/// cross-section area [m^2]
@@ -123,8 +117,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	_IAPWS.IAPWS iapws_old = new _IAPWS.IAPWS(p_old, T_old, 1);/// an object of class IAPWS
 	double rho = iapws_old.rho;					/// Density [kg/m^3]
 	double M = V_old/iapws_old.a;				/// Mach number	
-	double h_old = 2.7201154e6;					/// Specific enthalpy at inlet [J/kg]
-
+	
 	//update variables
 	//--x
 	double x_new = x_old + delta_x;
@@ -143,24 +136,25 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		* Use 1D Bisection Method to find the T_new such that:
 		* 	h(p_new, T_new) - h_old = 0	= f(p_new, T_new)  
 		*/
+
 		double f(double p, double T){
 			_IAPWS.IAPWS guess = new _IAPWS.IAPWS(p, T, 1); 		///assume always be gas
-			return guess.h-h_old;
+			return guess.s-s_old;
 		}
 		double dfdT(double p, double T){
 			/* use 2-point central finite difference to differentiate f(p,T)*/
-			double _h = 1e-3;
+			double _h = 1e-5;
 			return (f(p, T+_h)-f(p, T-_h))/(2*_h);
 		}
 		
 		//update Temperature
 		double T_0 = T_old; //T remains the same if there is no Area change 
-							  //and f_new = 0
+							//and f_new = 0
 		//initial guess 
 		double h = 5e-4; //step in temperature
 		double f_new = f(p_new, T_0);
 		int i=0;			  //iteration number
-		while(abs(f_new)>=1e3 && i<30){ //entropy tolerance 10 [J/kg K]
+		while(abs(f_new)>=0.1 && i<30){ //entropy tolerance 10 [J/kg K]
 										 //maximum iterations  
 			//calculate suitable step size for each iteration 
 			if(dfdT(p_new,T_0)>0)
@@ -194,19 +188,19 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 
 			//prepare for next iteration
 			T_0+=h;
-			//--if the updated T has acrossed the saturation boundary
-			if(T_0 < _IAPWS.get_Ts(p_new))
-			{
-				T_0 = _IAPWS.get_Ts(p_new);
-			}
 			f_new = f(p_new,T_0);
 			i+=1;
-			//logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
+			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
 		}
-		//logs.close();
+		logs.close();
 		return T_0;
 	}
 	double T_new = Bisection();
+	//--if the updated T has acrossed the saturation boundary
+	if(T_new < _IAPWS.get_Ts(p_new))
+	{
+		T_new = _IAPWS.get_Ts(p_new);
+	}
 
 	//update variable lists
 	phy_var = [x_new, A_new, V_new]; thermo_var = [p_new, T_new];
@@ -242,7 +236,16 @@ void main(){
 	
 	//stepping along x-axis
 	while(ideal_var[0][0]<67.95)
-	{
+	{	
+		/*//adjust step size in the segments with sudden area change
+		if(ideal_var[0][0]>6 && ideal_var[0][0]<10.5)
+		{
+			_delta_x = 1e-3*delta_x;	
+		}
+		else
+		{
+			_delta_x = delta_x;
+		}*/
 		iapws_phy = iapws_var[0]; iapws_thermo = iapws_var[1];
 		iapws_var = iapws(iapws_phy,iapws_thermo, delta_x);
 		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
@@ -254,7 +257,5 @@ void main(){
 		writeln("processing... step up to x=", ideal_var[0][0]);
 	} 
 	//close txt files
-	/*iapws_data.close(); ideal_data.close();
-	_IAPWS.IAPWS guess = new _IAPWS.IAPWS(270e3, 403.15, 1);
-	writef("%.8f",guess.h);*/
+	iapws_data.close(); ideal_data.close();
 }
