@@ -131,88 +131,65 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	double delta_p = -rho*V_old*delta_V;
 	double p_new = p_old + delta_p;
 	//--temperature
-	double Bisection(){
-		/*
-		* Use 1D Bisection Method to find the T_new such that:
-		* 	h(p_new, T_new) - h_old = 0	= f(p_new, T_new)  
-		*/
-
-		double f(double p, double T){
-			_IAPWS.IAPWS guess = new _IAPWS.IAPWS(p, T, 1); 		///assume always be gas
-			return (guess.s - s_old);
+		//---local functions to assist the iteration 
+	double f(double p, double T){
+		_IAPWS.IAPWS guess = new _IAPWS.IAPWS(p, T, 1); ///assume always be gas
+		return (guess.s - s_old);
+	}
+	double dfdT(double p, double T){
+		/* use 2-point central finite difference to differentiate f(p,T)*/
+		double _h = 1e-5;
+		if(f(p, T-_h) != f(p, T-_h)) // when the left boundary has acrossed the saturation boundary
+		{
+			_h = (T-_IAPWS.get_Ts(p))/2;
 		}
-		double dfdT(double p, double T){
-			/* use 2-point central finite difference to differentiate f(p,T)*/
-			double _h = 1e-5;
-			return (f(p, T+_h)-f(p, T-_h))/(2*_h);
-		}
+		return (f(p, T+_h)-f(p, T-_h))/(2*_h);
 		
+	}
+	double Newton(){
+		/*
+		* Use 1D Newton Method to find the T_new such that:
+		* 	s(p_new, T_new) - s_old = 0	= f(p_new, T_new)  
+		*/
 		//update Temperature
 		double T_0 = T_old; //T remains the same if there is no Area change 
 							//and f_new = 0
-		//initial guess 
-		double h = 5e-5; //step in temperature
-		double f_new = f(p_new, T_0);
+		//initial guess
+		double h = 5e-5; 
+		double f_old = f(p_new,T_0);
 		int i=0;			  //iteration number
-		while(abs(f_new)>0.002*s_old && i<30){ //entropy tolerance 10 [J/kg K]
-										 //maximum iterations  
-			//calculate suitable step size for each iteration 
-			if(dfdT(p_new,T_0)>0)
+		while((f_old!=f_old || abs(f_old)>0.002*s_old) && i<30)
+		{  //entropy tolerance .2% of initial entropy and maximum iterations  
+			// check if the updated temperature has acrossed the saturation boundary
+			if(f_old != f_old) // execute when f_new = nan
 			{
-				if(f(p_new,T_0)<0)
-				{
-					h = abs(h);
-					if(f(p_new,T_0+h)<0) {h*=2;}
-					else				 {h/=2;}
-				}
-				else if(f(p_new,T_0)>0)
-				{
-					h =-abs(h);
-					if(f(p_new,T_0+h)>0) {h*=2;}
-					else				 {h/=2;}
-				}
+				writeln("adjust T_new from ",T_0," [K]");
+				T_0 = _IAPWS.get_Ts(p_new) + (_IAPWS.get_Ts(p_new)-T_0)/2;
+				writeln("to ", T_0," [K]");
+				f_old = f(p_new,T_0);
 			}
-			else if(dfdT(p_new,T_0)<0)
-			{
-				if(f(p_new,T_0)<0)
-				{
-					h =-abs(h);
-					if(f(p_new,T_0+h)>0) {h/=2;}
-					else				 {h*=2;}
-				}
-				else if(f(p_new,T_0)>0)
-				{
-					h=abs(h);
-					if(f(p_new,T_0+h)<0) {h/=2;}
-					else				 {h*=2;}
-				}
-			}
+			//calculate suitable step size for this iteration 
+			double dfdt = (f(p_new,T_0+h)-f_old)/h;
+			h = -(f_old-0.002*s_old)/dfdt;
 
 			//prepare for next iteration
-			T_0+=h;
-			f_new = f(p_new,T_0);
+			T_0 += h;
+			f_old = f(p_new,T_0);
 			i+=1;
-			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_new:", f_new,", dfdT:",dfdT(p_new,T_0));
+
+/**/		//if iapws is not enough to find T_0 when entropy is fixed, let it equal to something slightly bigger than T_sat
+			if(f_old!=f_old && i==30)
+			{
+				writeln("Exceed IAPWS-Region 2 valid range, let update temperature be",
+						 "saturation temperature at update pressure.");
+				T_0 = _IAPWS.get_Ts(p_new)+5e-5;
+				f_old = f(p_new,T_0);
+			}
+			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_old:", f_old,", dfdT:",dfdt,", h:", h);
 		}
 		return T_0;
-	}
-	double T_new = Bisection();
-	//--if the updated T has acrossed the saturation boundary
-	while(T_new < _IAPWS.get_Ts(p_new) || p_new > _IAPWS.get_ps(T_new))
-	{
-		if(T_new < _IAPWS.get_Ts(p_new))
-		{
-			//make sure the updated state is suifficiently far away from saturation 
-			//boundary
-			T_new = _IAPWS.get_Ts(p_new) + (_IAPWS.get_Ts(p_new)-T_new)/2;
-			writeln("adjust T_new"); 
-		}
-		else if(p_new > _IAPWS.get_ps(T_new))
-		{
-			p_new = _IAPWS.get_ps(T_new) - (p_new-_IAPWS.get_ps(T_new))/2;
-			writeln("adjust p_new");
-		}	
-	}
+	}//end Newton()
+	double T_new = Newton(); 
 
 	//update variable lists
 	phy_var = [x_new, A_new, V_new]; thermo_var = [p_new, T_new];
@@ -246,11 +223,11 @@ void main(){
 	write("Step size of x in mm:");readf("%f", &delta_x);
 	
 	//stepping along x-axis
-	while(iapws_var[0][0]<67.949)
+	while(ideal_var[0][0]<67.95)
 	{
-		iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
+		/*iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
 		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
-							" ",iapws_var[1][0]," ",iapws_var[1][1]);
+							" ",iapws_var[1][0]," ",iapws_var[1][1]);*/
 		ideal_var = ideal(ideal_var[0], ideal_var[1], delta_x);
 		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
