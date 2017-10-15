@@ -26,26 +26,8 @@ static import _IAPWS = IAPWS_local;
 //radius [mm]
 double r(double x){
 	assert(x>=0);
-	double r; //radius in [mm]
-	if(x<=5)
-	{
-		return 5;
-	}
-	else if(5<x && x<=6.65)
-	{
-		r = sqrt(abs(1.65^^2-(x-5)^^2))+3.35;
-		return r;
-	}
-	else if(6.65<x && x<=8.45)
-	{
-		r = -sqrt(abs(1.8^^2-(x-8.45)^^2))+3.35;
-		return r;
-	}
-	else
-	{
-		r = tan(PI*5/180)*(x-8.45)+1.55;
-		return r;
-	}
+	if(x<=30){return (23./6000.)*x^^2+(-23./100.)*x+5;}
+	else{return (3./2023.)*x^^2+(-180./2023.)*x+116713./40460.;}
 }
 
 //Area [m^2]
@@ -58,8 +40,11 @@ double A(double x){ return PI * (1e-3*r(x))^^2;}
 //-------------------------------------------------------------------------------
 double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
-	assert(_IAPWS.R); 						/// specific gas constant[J/kg/K]
-	double kappa = 1.308;     					/// isentropic exponent kappa 
+	assert(_IAPWS.R); 							/// specific gas constant[J/kg/K]
+	//double R = 287.058;						    /// R = 287.058 [J/kg/K] for air;
+	double R = _IAPWS.R; 								/// R = _IAPWS.R for steam
+	double kappa = 1.308;     					/// isentropic exponent kappa for steam
+												/// 1.4 for air, 1.308 for steam 
 
 	//initial physical variables 
 	double x_old = phy_var[0];					/// horizontal location [mm]
@@ -70,8 +55,8 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 	double T_old = thermo_var[1];				/// temperature [K]
 
 	//Intermedia thermo variables
-	double rho = p_old/_IAPWS.R/T_old;					/// Density [kg/m^3]
-	double M = V_old/sqrt(kappa*_IAPWS.R*T_old);		/// Mach number
+	double rho = p_old/R/T_old;					/// Density [kg/m^3]
+	double M = V_old/sqrt(kappa*R*T_old);		/// Mach number
 
 	//update variables
 	//--x
@@ -213,7 +198,7 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-	double[][] init_var = [[5,A(5),30.62983],[270e3,403.15]];
+	double[][] init_var = [[0,A(0),30.62983],[270e3,403.15]];
 	double[][] ideal_var = init_var;
 	double[][] iapws_var = init_var;
 
@@ -223,15 +208,15 @@ void main(){
 	write("Step size of x in mm:");readf("%f", &delta_x);
 	
 	//stepping along x-axis
-	while(ideal_var[0][0]<67.95)
+	while(ideal_var[0][0]<89.5)
 	{
-		/*iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
+		iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
 		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
-							" ",iapws_var[1][0]," ",iapws_var[1][1]);*/
-		ideal_var = ideal(ideal_var[0], ideal_var[1], delta_x);
-		ideal_data.writeln(ideal_var[0][0]," ", ideal_var[0][1], " ",ideal_var[0][2],
+							" ",iapws_var[1][0]," ",iapws_var[1][1]);
+		ideal_var = ideal(ideal_var[0],ideal_var[1], delta_x);
+		ideal_data.writeln(ideal_var[0][0]," ",ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
-		writeln("Processing...up to x = ", iapws_var[0][0]);
+		writeln("Processing...up to x = ", ideal_var[0][0]);
 	}
 	
 	writeln("outlet conditions:ideal:", ideal_var, ", iapws:",iapws_var);
