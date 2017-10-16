@@ -27,7 +27,8 @@ static import _IAPWS = IAPWS_local;
 double r(double x){
 	assert(x>=0);
 	if(x<=30){return (23./6000.)*x^^2+(-23./100.)*x+5;}
-	else{return (3./2023.)*x^^2+(-180./2023.)*x+116713./40460.;}
+	else if(30<x&&x<=31){return 1.55;}
+	else{return (3./2023.)*(x-1)^^2+(-180./2023.)*(x-1)+116713./40460.;}
 }
 
 //Area [m^2]
@@ -41,9 +42,9 @@ double A(double x){ return PI * (1e-3*r(x))^^2;}
 double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
 	assert(_IAPWS.R); 							/// specific gas constant[J/kg/K]
-	//double R = 287.058;						    /// R = 287.058 [J/kg/K] for air;
-	double R = _IAPWS.R; 								/// R = _IAPWS.R for steam
-	double kappa = 1.308;     					/// isentropic exponent kappa for steam
+	double R = 287.058;						    /// R = 287.058 [J/kg/K] for air;
+	//double R = _IAPWS.R; 								/// R = _IAPWS.R for steam
+	double kappa = 1.4;     					/// isentropic exponent kappa for steam
 												/// 1.4 for air, 1.308 for steam 
 
 	//initial physical variables 
@@ -71,7 +72,7 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 	double delta_T = (1-kappa)*(M^^2)*T_old*delta_V/V_old;
 	double T_new = T_old + delta_T;
 	//--pressure
-	double p_new = p_old * (T_new/T_old)^^(kappa/(kappa-1));
+/**/double p_new = p_old * (T_new/T_old)^^(kappa/(kappa-1));
 
 	//update variable lists
 	phy_var = [x_new, A_new, V_new]; thermo_var = [p_new, T_new];
@@ -198,7 +199,7 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-	double[][] init_var = [[0,A(0),30.62983],[270e3,403.15]];
+/**/double[][] init_var = [[0,A(0),25],[270e3,403.15]];
 	double[][] ideal_var = init_var;
 	double[][] iapws_var = init_var;
 
@@ -210,9 +211,9 @@ void main(){
 	//stepping along x-axis
 	while(ideal_var[0][0]<89.5)
 	{
-		iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
-		iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
-							" ",iapws_var[1][0]," ",iapws_var[1][1]);
+		//iapws_var = iapws(iapws_var[0],iapws_var[1], delta_x);
+		//iapws_data.writeln(iapws_var[0][0]," ", iapws_var[0][1], " ",iapws_var[0][2],
+		//					" ",iapws_var[1][0]," ",iapws_var[1][1]);
 		ideal_var = ideal(ideal_var[0],ideal_var[1], delta_x);
 		ideal_data.writeln(ideal_var[0][0]," ",ideal_var[0][1], " ",ideal_var[0][2],
 							" ", ideal_var[1][0]," ",ideal_var[1][1]);
