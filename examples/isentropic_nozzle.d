@@ -40,12 +40,14 @@ double A(double x){ return PI * (1e-3*r(x))^^2;}
 //		  location (delta_x [mm]) is taken 
 //-------------------------------------------------------------------------------
 double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
+	File logs=File("ideal_log.txt", "a"); 
 	//constants
 	assert(_IAPWS.R); 							/// specific gas constant[J/kg/K]
-	double R = 287.058;						    /// R = 287.058 [J/kg/K] for air;
+	double R = _IAPWS.R;						    /// R = 287.058 [J/kg/K] for air;
 	//double R = _IAPWS.R; 								/// R = _IAPWS.R for steam
-	double kappa = 1.4;     					/// isentropic exponent kappa for steam
-												/// 1.4 for air, 1.308 for steam 
+	double kappa = 1.308;     					/// isentropic exponent kappa for steam
+												/// 1.4 for air, 1.308 for steam
+	double m_dot = 12.75/3600;					/// mass flow rate [kg/s] 
 
 	//initial physical variables 
 	double x_old = phy_var[0];					/// horizontal location [mm]
@@ -54,27 +56,58 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 	//initial thermaldynamic variables
 	double p_old = thermo_var[0];				/// pressure [Pa]
 	double T_old = thermo_var[1];				/// temperature [K]
-
 	//Intermedia thermo variables
 	double rho = p_old/R/T_old;					/// Density [kg/m^3]
 	double M = V_old/sqrt(kappa*R*T_old);		/// Mach number
 
-	//update variables
-	//--x
+	//iteratively update variable untill delta_V is converging
+		///update variables
+		///--x
 	double x_new = x_old + delta_x;
-	//--Area
+		///--Area
 	double A_new = A(x_old+delta_x); 
 	double delta_A = A_new- A_old;
-	//--Velocity
-	double delta_V = -V_old/(1-M^^2)*delta_A/A_old;
-	double V_new = V_old + delta_V; 
-	//--temperature
-	double delta_T = (1-kappa)*(M^^2)*T_old*delta_V/V_old;
-	double T_new = T_old + delta_T;
-	//--pressure
-/**/double p_new = p_old * (T_new/T_old)^^(kappa/(kappa-1));
+		///--Temperature, pressure, velocity
+	double T_new, delta_T, p_new, delta_p, V_new;
+		///--Primary updated velocity and velocity step
+	double delta_V_1 = -V_old/(1-M^^2)*delta_A/A_old;
+		///dummy initial velocity step to start update loop
+	double delta_V_0 =1e3;
+	double iteration=0;
+	while(abs(delta_V_1-delta_V_0)>1e-4 && iteration<20)
+	{
+		delta_V_0 = delta_V_1; //reset the velocity step
+		//--temperature
+		delta_T = (1-kappa)*(M^^2)*T_old*delta_V_0/V_old;
+		T_new = T_old + delta_T;
+		//--pressure
+		delta_p = -rho*V_old*delta_V_0;
+		p_new = p_old + delta_p;
+		//--Secondary updated velocity and velocity step
+		double rho_1 = p_new/R/T_new;
+		V_new = m_dot/rho_1/A_new;
+		delta_V_1 = V_new - V_old;
+		logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,
+			", Temperature:",T_new,", iteration:",iteration,", d_delta_V:",
+				delta_V_1 - delta_V_0);
+
+		iteration+=1;
+	}
+
+	////if bad velocity update to make flow become supersonic before reaching 
+	////the throat, slightly increase the temperature change to make it subsonic 
+	//if(x_new<30 && V_new/sqrt(kappa*R*T_new)>=1)
+	//{
+	//	while(V_new/sqrt(kappa*R*T_new)>=1)
+	//	{
+	//		delta_T*=1.05;
+	//		T_new=T_old+delta_T;
+			
+	//	}
+	//}
 
 	//update variable lists
+	logs.close();
 	phy_var = [x_new, A_new, V_new]; thermo_var = [p_new, T_new];
 
 	return [phy_var,thermo_var]; 
@@ -90,7 +123,7 @@ double s_old = 7026.906765;					/// Specific entropy at inlet [J/kg K]
 double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 	//constants
 	assert(_IAPWS.R); 						/// specific gas constant[J/kg/K]
-	File logs=File("log.txt", "a"); 
+	File logs=File("iapws_log.txt", "a"); 
 	//initial physical variables 
 	double x_old = phy_var[0];					/// horizontal location [mm]
 	double A_old = phy_var[1];					/// cross-section area [m^2]
@@ -144,7 +177,7 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 		double h = 5e-5; 
 		double f_old = f(p_new,T_0);
 		int i=0;			  //iteration number
-		while((f_old!=f_old || abs(f_old)>0.002*s_old) && i<30)
+		while((f_old!=f_old || abs(f_old)>0.002*s_old) && i<10)
 		{  //entropy tolerance .2% of initial entropy and maximum iterations  
 			// check if the updated temperature has acrossed the saturation boundary
 			if(f_old != f_old) // execute when f_new = nan
@@ -163,16 +196,19 @@ double[][] iapws(double[] phy_var, double[] thermo_var, double delta_x){
 			f_old = f(p_new,T_0);
 			i+=1;
 
-/**/		//if iapws is not enough to find T_0 when entropy is fixed, let it equal to something slightly bigger than T_sat
-			if(f_old!=f_old && i==30)
+/**/		//if iapws is not enough to find T_0 when entropy is fixed, let it equal 
+			//to something slightly bigger than T_sat
+			if(f_old!=f_old && i==10)
 			{
 				writeln("Exceed IAPWS-Region 2 valid range, let update temperature be",
 						 "saturation temperature at update pressure.");
 				T_0 = _IAPWS.get_Ts(p_new)+5e-5;
 				f_old = f(p_new,T_0);
 			}
-			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,", T:", T_0, ", f_old:", f_old,", dfdT:",dfdt,", h:", h);
+			logs.writeln("x:",x_new,", V:", V_new, ", Pressure:", p_new,", iteration:",i,
+							", T:", T_0, ", f_old:", f_old,", dfdT:",dfdt,", h:", h);
 		}
+		logs.close();
 		return T_0;
 	}//end Newton()
 	double T_new = Newton(); 
@@ -199,11 +235,20 @@ void main(){
 	//variables at the nozzle inlet
 	//-- [physical: (x[mm], area[m^2], velocity [m/s]),
 	//-- thermal: (pressure[Pa], temperature [K]) ]
-/**/double[][] init_var = [[0,A(0),25],[270e3,403.15]];
-	double[][] ideal_var = init_var;
-	double[][] iapws_var = init_var;
+/**/double[][] init_var = [[0,A(0),0],[270e3,403.15]];
+	double[][] ideal_var = init_var;double[][] iapws_var = init_var;
+	//apply different approach to evaluate initial density
+	double ideal_rho_0 = init_var[1][0]/_IAPWS.R/init_var[1][1];
+	_IAPWS.IAPWS init = new _IAPWS.IAPWS(init_var[1][0], init_var[1][1], 1);
+	double iapws_rho_0 = init.rho;
+	//evaluate initial velocity [m/s] based on density 
+	// (mass flow rate = 12.75 kg/hr)
+	double ideal_V0 = 12.75/3600/ideal_rho_0/init_var[0][1];
+	double iapws_V0 = 12.75/3600/iapws_rho_0/init_var[0][1];
+	ideal_var[0][2] = ideal_V0; iapws_var[0][2] = iapws_V0;
 
-	writeln("Inlet conditions:", init_var);
+
+	writeln("Inlet conditions: ideal:", ideal_var,", iapws:",iapws_var);
 
 	double delta_x;
 	write("Step size of x in mm:");readf("%f", &delta_x);
