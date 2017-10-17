@@ -74,7 +74,7 @@ double[][] ideal(double[] phy_var, double[] thermo_var, double delta_x){
 		///dummy initial velocity step to start update loop
 	double delta_V_0 =1e3;
 	double iteration=0;
-	while(abs(delta_V_1-delta_V_0)>1e-4 && iteration<20)
+	while(abs(delta_V_1-delta_V_0)>1e-6 && iteration<50)
 	{
 		delta_V_0 = delta_V_1; //reset the velocity step
 		//--temperature
