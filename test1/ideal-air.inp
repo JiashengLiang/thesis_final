@@ -1,2 +1,2 @@
 model = "IdealGas"
-species = {'H2O'}
+species = {'air'}
