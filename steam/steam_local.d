@@ -1182,7 +1182,6 @@ private:
 	phi_deltatau = sum_deltatau;
     }
 
-
 public:
     double SpecificVolume(){return v;}
     //(Region3 basic equation)table 2.16
@@ -1702,182 +1701,175 @@ public:
 } // end class IAPWS
 
 
+//local update function 
+double update_from_rhou(double rho, double u, double quality)
+{
+	//local thermal update method for (rho,u)
+	//a guess of p & T is iterated on update_thermo_from_pT using 
+	//the  Newton-Raphson method.
+	
+	double dp, p_old, p_new, T_old, T_new, dT;
+	double dp_sign, dT_sign;
+	double Cv_eff, R_eff, rho_old;
+	double frho_old, fu_old, frho_new, fu_new;
+	double dfrho_dp, dfu_dp, dfrho_dT, dfu_dT, det;
+	int converged, count;
+
+	immutable MAX_RELATIVE_STEP = 0.1;
+	immutable MAX_STEPS = 30;
+
+	// When using single-sided finite-differences on the
+	// curve-fit EOS functions, we really cannot expect 
+	// much more than 0.1% tolerance here.
+	// However, we want a tighter tolerance so that the starting values
+	// don't get shifted noticeably.
+ 
+	double fu_tol = 1.0e-6 * u;
+	double frho_tol = 1.0e-6 * rho;
+	double frho_tol_fail = 0.02 * rho;
+	double fu_tol_fail = 0.02 * u;
+
+	// Get an idea of the gas properties by calling the pT
+	// equation of state with some dummy values for pressure
+	// and thermal temperature. the iteration start from vapour phase
+	double p = 1.0; // [Pa] 
+	double T = 273.15; // [k] 
+	IAPWS _IAPWS = new IAPWS(p,T,1);
+    
+	double u_old = _IAPWS.u;
+	R_eff = p / (rho * u_old);
+	dT = 0.01 * T;
+	T += dT;
+
+/**/try { IAPWS _IAPWS_1 = new IAPWS(p,T,1);}
+	catch (Exception caughtException) {
+	    string msg;
+	    msg ~= format("Starting guess at iteration 1 failed in %s\n", __FUNCTION__);
+	    msg ~= format("Excpetion message from update_from_pT() was:\n\n");
+	    msg ~= to!string(caughtException);
+	    throw new Exception(msg);
+	}
+
+
+	Cv_eff = (_IAPWS.u - u_old) / dT;
+	// Now, get a better guess for the appropriate pressure and
+	// thermal temperature.
+/*6*/p_old = R_eff * rho * T_old;    
+	T_old = (u - _IAPWS.u)/Cv_eff + T;
+
+	// Evaluate state variables using this guess.
+
+	try { IAPWS _IAPWS = new IAPWS(p_old,T_old,1); }
+	catch (Exception caughtException) {
+	    string msg;
+	    msg ~= format("Starting guess at iteration 2 failed in %s\n", __FUNCTION__);
+	    msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
+	    msg ~= to!string(caughtException);
+	    throw new Exception(msg);
+	}
+
+	frho_old = rho - _IAPWS.rho;
+	fu_old = u - _IAPWS.u;
+	// Update the guess using Newton iterations
+	// with the partial derivatives being estimated
+	// via finite differences.
+	converged = (fabs(frho_old) < frho_tol) && (fabs(fu_old) < fu_tol);
+	count = 0;
+	while ( !converged && count < MAX_STEPS ) {
+	    // Perturb first dimension to get derivatives.
+	    p_new = p_old * 1.0001;
+	    T_new = T_old;
+	    try { IAPWS _IAPWS = new IAPWS(p_new,T_new,1); }
+	    catch (Exception caughtException) {
+		string msg;
+		msg ~= format("Iteration %s failed at call A in %s\n", count, __FUNCTION__); 
+		msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
+		msg ~= to!string(caughtException);
+		throw new Exception(msg);
+	    }
+	    frho_new = rho - _IAPWS.rho;
+	    fu_new = u - _IAPWS.u;
+	    dfrho_dp = (frho_new - frho_old) / (p_new - p_old);
+	    dfu_dp = (fu_new - fu_old) / (p_new - p_old);
+	    // Perturb other dimension to get derivatives.
+	    p_new = p_old;
+	    T_new = T_old * 1.0001;
+
+	    try { IAPWS _IAPWS = new IAPWS(p_new,T_new,1); }
+	    catch (Exception caughtException) {
+		string msg;
+		msg ~= format("Iteration %s failed at call B in %", count, __FUNCTION__);
+		msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
+		msg ~= to!string(caughtException);
+		throw new Exception(msg);
+	    }
+
+	    frho_new = rho - _IAPWS.rho;
+	    fu_new = u - Q.u;
+	    dfrho_dT = (frho_new - frho_old) / (T_new - T_old);
+	    dfu_dT = (fu_new - fu_old) / (T_new - T_old);
+	    //Jacobian matrix determinant 
+	    det = dfrho_dp * dfu_dT - dfu_dp * dfrho_dT;
+	    if( fabs(det) < 1.0e-12 ) {
+		string msg;
+		msg ~= format("Error in function %s\n", __FUNCTION__);
+		msg ~= format("    Nearly zero determinant, det = ", det);
+		throw new Exception(msg);
+	    }
+	    dp = (-dfu_dT * frho_old + dfrho_dT * fu_old) / det;
+	    dT = (dfu_dp * frho_old - dfrho_dp * fu_old) / det;
+	    if( fabs(dp) > MAX_RELATIVE_STEP * p_old ) {
+		// move a little toward the goal 
+		dp_sign = (dp > 0.0 ? 1.0 : -1.0);
+		dp = dp_sign * MAX_RELATIVE_STEP * p_old;
+	    } 
+	    if( fabs(dT) > MAX_RELATIVE_STEP * T_old ) {
+		// move a little toward the goal
+		dT_sign = (dT > 0.0 ? 1.0 : -1.0);
+		dT = dT_sign * MAX_RELATIVE_STEP * T_old;
+	    } 
+	    p_old += dp;
+	    T_old += dT;
+	    // Make sure of consistent thermo state.
+	    try { IAPWS _IAPWS = new IAPWS(p_old,T_old,1); }
+	    catch (Exception caughtException) {
+		string msg;
+		msg ~= format("Iteration %s failed in %s\n", count, __FUNCTION__);
+		msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
+		msg ~= to!string(caughtException);
+		throw new Exception(msg);
+	    }
+	    // Prepare for next iteration.
+	    frho_old = rho - _IAPWS.rho;
+	    fu_old = u - _IAPWS.u;
+	    converged = (fabs(frho_old) < frho_tol) && (fabs(fu_old) < fu_tol);
+	    ++count;
+	} // end while 
+
+	if ( count >= MAX_STEPS ) {
+	    string msg;
+	    msg ~= format("Warning in function: %s:\n", __FUNCTION__);
+	    msg ~= format("    Iterations did not converge.\n");
+	    msg ~= format("    frho_old = %g, fu_old = %g\n", frho_old, fu_old);
+	    msg ~= format("    rho = %.10s, u, %.5s\n", rho, u); 
+	    msg ~= format("	   solution might be in liquid-vapour mixture state.\n");
+	    writeln(msg);
+
+	}
+
+	if( (fabs(frho_old) > frho_tol_fail) || (fabs(fu_old) > fu_tol_fail) ) {
+	    string msg;
+	    msg ~= format("Error in function: %s:\n", __FUNCTION__);
+	    msg ~= format("    Iterations failed badly.\n");
+	    msg ~= format("    rho = %.10s, u, %.5s\n", rho, u); 
+	    msg ~= format("    frho_old = %g, fu_old = %g\n", frho_old, fu_old);
+	    msg ~= format("	   solution might across saturation boundary.\n");
+	    throw new Exception(msg);
+	}
+}
+
 void main()
 {
 	IAPWS test = new IAPWS(10e6,310.9995+273.15,-1);
 	writefln("%.12f",1/test.rho);
 }
-
-//local update function 
-//double update_from_rhou(double rho, double u, double quality)
-//{
-//	//local thermal update method for (rho,u)
-//	//a guess of p & T is iterated on update_thermo_from_pT using 
-//	//the  Newton-Raphson method.
-	
-//	double dp, p_old, p_new, T_old, T_new, dT;
-//	double dp_sign, dT_sign;
-//	double Cv_eff, R_eff, rho_old;
-//	double frho_old, fu_old, frho_new, fu_new;
-//	double dfrho_dp, dfu_dp, dfrho_dT, dfu_dT, det;
-//	int converged, count;
-
-//	immutable MAX_RELATIVE_STEP = 0.1;
-//	immutable MAX_STEPS = 30;
-
-//	// When using single-sided finite-differences on the
-//	// curve-fit EOS functions, we really cannot expect 
-//	// much more than 0.1% tolerance here.
-//	// However, we want a tighter tolerance so that the starting values
-//	// don't get shifted noticeably.
- 
-//	double fu_tol = 1.0e-6 * u;
-//	double frho_tol = 1.0e-6 * rho;
-//	double frho_tol_fail = 0.02 * rho;
-//	double fu_tol_fail = 0.02 * u;
-
-//	// Get an idea of the gas properties by calling the pT
-//	// equation of state with some dummy values for pressure
-//	// and thermal temperature. the iteration start from vapour phase
-//	double p = 1.0; // [Pa] 
-//	double T = 273.15; // [k] 
-//	IAPWS _IAPWS = new IAPWS(p,T,1);
-    
-//	u_old = _IAPWS.u;
-//	R_eff = p / (rho * u_old);
-//	dT = 0.01 * T;
-//	T += dT;
-
-//	try { IAPWS _IAPWS = new IAPWS(p,T,1);}
-//	catch (Exception caughtException) {
-//	    string msg;
-//	    msg ~= format("Starting guess at iteration 1 failed in %s\n", __FUNCTION__);
-//	    msg ~= format("Excpetion message from update_from_pT() was:\n\n");
-//	    msg ~= to!string(caughtException);
-//	    throw new Exception(msg);
-//	}
-
-///**/	Cv_eff = (Q.u - u_old) / dT;
-//	// Now, get a better guess for the appropriate pressure and
-//	// thermal temperature.
-//	/*6*/p_old = R_eff * rho * T_old;    
-//	T_old = (u - Q.u)/Cv_eff + Q.Ttr;
-
-//	// Evaluate state variables using this guess.
-//	Q.p = p_old;
-//	Q.Ttr = T_old;
-
-//	try { gmodel.update_thermo_from_pT(Q); }
-//	catch (Exception caughtException) {
-//	    string msg;
-//	    msg ~= format("Starting guess at iteration 2 failed in %s\n", __FUNCTION__);
-//	    msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
-//	    msg ~= to!string(caughtException);
-//	    throw new Exception(msg);
-//	}
-
-//	frho_old = rho - Q.rho;
-//	fu_old = u - Q.u;
-//	// Update the guess using Newton iterations
-//	// with the partial derivatives being estimated
-//	// via finite differences.
-//	converged = (fabs(frho_old) < frho_tol) && (fabs(fu_old) < fu_tol);
-//	count = 0;
-//	while ( !converged && count < MAX_STEPS ) {
-//	    // Perturb first dimension to get derivatives.
-//	    p_new = p_old * 1.0001;
-//	    T_new = T_old;
-//	    Q.p = p_new;
-//	    Q.Ttr = T_new;
-//	    try { gmodel.update_thermo_from_pT(Q); }
-//	    catch (Exception caughtException) {
-//		string msg;
-//		msg ~= format("Iteration %s failed at call A in %s\n", count, __FUNCTION__); 
-//		msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
-//		msg ~= to!string(caughtException);
-//		throw new Exception(msg);
-//	    }
-//	    frho_new = rho - Q.rho;
-//	    fu_new = u - Q.u;
-//	    dfrho_dp = (frho_new - frho_old) / (p_new - p_old);
-//	    dfu_dp = (fu_new - fu_old) / (p_new - p_old);
-//	    // Perturb other dimension to get derivatives.
-//	    p_new = p_old;
-//	    T_new = T_old * 1.0001;
-//	    Q.p = p_new;
-//	    Q.Ttr = T_new;
-
-//	    try { gmodel.update_thermo_from_pT(Q); }
-//	    catch (Exception caughtException) {
-//		string msg;
-//		msg ~= format("Iteration %s failed at call B in %", count, __FUNCTION__);
-//		msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
-//		msg ~= to!string(caughtException);
-//		throw new Exception(msg);
-//	    }
-
-//	    frho_new = rho - Q.rho;
-//	    fu_new = u - Q.u;
-//	    dfrho_dT = (frho_new - frho_old) / (T_new - T_old);
-//	    dfu_dT = (fu_new - fu_old) / (T_new - T_old);
-//	    det = dfrho_dp * dfu_dT - dfu_dp * dfrho_dT;
-//	    if( fabs(det) < 1.0e-12 ) {
-//		string msg;
-//		msg ~= format("Error in function %s\n", __FUNCTION__);
-//		msg ~= format("    Nearly zero determinant, det = ", det);
-//		throw new Exception(msg);
-//	    }
-//	    dp = (-dfu_dT * frho_old + dfrho_dT * fu_old) / det;
-//	    dT = (dfu_dp * frho_old - dfrho_dp * fu_old) / det;
-//	    if( fabs(dp) > MAX_RELATIVE_STEP * p_old ) {
-//		// move a little toward the goal 
-//		dp_sign = (dp > 0.0 ? 1.0 : -1.0);
-//		dp = dp_sign * MAX_RELATIVE_STEP * p_old;
-//	    } 
-//	    if( fabs(dT) > MAX_RELATIVE_STEP * T_old ) {
-//		// move a little toward the goal
-//		dT_sign = (dT > 0.0 ? 1.0 : -1.0);
-//		dT = dT_sign * MAX_RELATIVE_STEP * T_old;
-//	    } 
-//	    p_old += dp;
-//	    T_old += dT;
-//	    // Make sure of consistent thermo state.
-//	    Q.p = p_old;
-//	    Q.Ttr = T_old;
-//	    try { gmodel.update_thermo_from_pT(Q); }
-//	    catch (Exception caughtException) {
-//		string msg;
-//		msg ~= format("Iteration %s failed in %s\n", count, __FUNCTION__);
-//		msg ~= format("Excpetion message from update_thermo_from_pT() was:\n\n");
-//		msg ~= to!string(caughtException);
-//		throw new Exception(msg);
-//	    }
-//	    // Prepare for next iteration.
-//	    frho_old = rho - Q.rho;
-//	    fu_old = u - Q.u;
-//	    converged = (fabs(frho_old) < frho_tol) && (fabs(fu_old) < fu_tol);
-//	    ++count;
-//	} // end while 
-
-//	if ( count >= MAX_STEPS ) {
-//	    string msg;
-//	    msg ~= format("Warning in function: %s:\n", __FUNCTION__);
-//	    msg ~= format("    Iterations did not converge.\n");
-//	    msg ~= format("    frho_old = %g, fu_old = %g\n", frho_old, fu_old);
-//	    msg ~= format("    rho = %.10s, u, %.5s\n", rho, u); 
-//	    msg ~= "  Supplied Q:" ~ Q.toString();
-//	    writeln(msg);
-
-//	}
-
-//	if( (fabs(frho_old) > frho_tol_fail) || (fabs(fu_old) > fu_tol_fail) ) {
-//	    string msg;
-//	    msg ~= format("Error in function: %s:\n", __FUNCTION__);
-//	    msg ~= format("    Iterations failed badly.\n");
-//	    msg ~= format("    rho = %.10s, u, %.5s\n", rho, u); 
-//	    msg ~= format("    frho_old = %g, fu_old = %g\n", frho_old, fu_old);
-//	    msg ~= "  Supplied Q:" ~ Q.toString();
-//	    throw new Exception(msg);
-//	}
-//        +++++++++++++++++++++++++++++++++++++++++++++++++++++++++/
-//}
