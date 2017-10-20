@@ -12,23 +12,26 @@
  *		1.5 IAPWS-Region5 formulaiton struct.
  *		1.6 IAPWS base class whose object has all the calculated values
  *			of state properties.
- *	2.Steam gasmodel class.    
+ *	2.Local functions for (p,T) calculation.
+ *		2.1 Numerical method to obtain (p,T) based on given (rho,u)
+ *			(not applicable for liquid-vapour mixture state). 
+ *	3.Steam gasmodel class.    
  * Author: Jiasheng(Jason) Liang
  * Version:
  */
 
-//module gas.steam;
+module gas.steam;
 
 import std.stdio;
 import std.math;
 import std.string;
 import std.conv;
 
-//import gas.physical_constants;
-//import gas.gas_model;
+import gas.physical_constants;
+import gas.gas_model;
 
 //steam constants:
-/**/immutable double R=461.526; /// specific gas constant[J/kg/K]
+immutable double R=461.526; /// specific gas constant[J/kg/K]
 immutable double rho_c=322; /// critical density [kg/m^^3]	
 immutable double T_c=647.096; /// critical thermal temperature [K]
 immutable double p_c=22.064e6; /// critical pressure [Pa]
@@ -1343,8 +1346,6 @@ private:
     string region; // e.g. '2': Formulation Region 2 of IAPWS
     // distance from the input p-T to the closest saturation point 
     double dis_satoff;
-    //tolerance for the distance to the closest saturation point 
-    immutable SATURATION_TOL = 0.01;
 
     //tables for calculating dynamic viscosity:
     double[4] table_3_1=[0.167752e-1,0.220462e-1,0.6366564e-2,-0.241605e-2];
@@ -1589,9 +1590,7 @@ public:
 	T = _T;p = _p; quality = _quality;
 	update_thermo;
     }
-
     this(){}
-
     ~this(){}
 
     //function to compute dynamic viscosity but not in IAPWS-IF97
@@ -1702,11 +1701,13 @@ public:
     } // end ThermalConductivity   
 } // end class IAPWS
 
+//---------------------------------------------------------------------------------
+//PART 2.1. Numerical method to calculate (p,T) based on given (rho,u)
+//			(inspired by fill-in functions in gas_model.d)
+//---------------------------------------------------------------------------------
 
-//local function to iterate a guess of (p, T) to match (rho, u)  
 double[] getpT_from_rhou(double rho, double u, double quality)
-{
-/**/File logs=File("getpT_from_rhou.txt", "w"); 
+{ 
 	//local thermal update method for (rho,u)
 	//a guess of p & T is iterated on update_thermo_from_pT using 
 	//the  Newton-Raphson method.
@@ -1743,8 +1744,6 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	R_eff = p_old / (_IAPWS.rho * u);
 	dT = 0.01 * T_old;
 	T_old += dT;
-	logs.writeln("p_old:",p_old," T_old:", T_old, " rho:", _IAPWS.rho,
-			" u:", _IAPWS.u);
 
 	try { _IAPWS = new IAPWS(p_old,T_old,1);}
 	catch (Exception caughtException) {
@@ -1771,8 +1770,6 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	}
 	frho_old = rho - _IAPWS.rho;
 	fu_old = u - _IAPWS.u;
-	logs.writeln("p_old:",p_old," T_old:", T_old, " rho:", _IAPWS.rho,
-			" u:", _IAPWS.u," frho_old:", frho_old," fu_old:", fu_old);
 
 	// Update the guess using Newton iterations
 	// with the partial derivatives being estimated
@@ -1849,8 +1846,6 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	    converged = (fabs(frho_old) < frho_tol) && (fabs(fu_old) < fu_tol);
 	    ++count;
 
-	    logs.writeln("p_old:",p_old," T_old:", T_old, " rho:", _IAPWS.rho,
-			" u:", _IAPWS.u," frho_old:", frho_old," fu_old:", fu_old," i:", count);
 	} // end while 
 
 	if ( count >= MAX_STEPS ) {
@@ -1872,17 +1867,193 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	    throw new Exception(msg);
 	}
 
-	logs.close();
 	return [p_old, T_old];
-}
+}//end getpT_from_rhou
 
-void main()
-{
-	IAPWS test = new IAPWS();
-	test.p=10e6;
-	test.T=310.999+273.15;
-	test.quality=-1;
-	test.update_thermo();
-	writefln("%.12f",1/test.rho);
-	//getpT_from_rhou(5,2800e3,1);
+//---------------------------------------------------------------------------------
+//PART 3. Steam class inheritted from GasModel class
+//---------------------------------------------------------------------------------
+
+class Steam: GasModel{
+public:
+	IAPWS _IAPWS = new IAPWS();
+    
+    this()
+    {
+	_n_species = 1;
+	_n_modes = 0;
+	_species_names ~= "H2O";
+	_mol_masses ~= 0.018015257;// value from International Steam Table (Wanger W.,2008)
+	create_species_reverse_lookup();	
+    } // end constructor
+
+    override string toString() const
+    {
+	return "Steam(From the IAPWS releases R7-97, R12-08 and R15-11)";
+    }
+
+    override void update_thermo_from_pT(GasState Q) const
+    {
+    	this._IAPWS.p = Q.p.dup;
+    	this._IAPWS.T = Q.Ttr.dup;
+    	this._IAPWS.update_thermo();
+		Q.rho = _IAPWS.rho;
+		Q.a = _IAPWS.a;
+		Q.u = _IAPWS.u;
+		Q.mu = _IAPWS.mu;
+		Q.k = _IAPWS.k;
+    }
+
+    override void update_thermo_from_rhou(GasState Q) const
+    {
+	assert(0, "Implement me.");
+    } 
+    
+    override void update_thermo_from_rhoT(GasState Q)
+    {
+	assert(0, "Implement me");
+    }
+    
+    override void update_thermo_from_rhop(GasState Q)
+    {
+	assert(0, "Implement me");
+    }
+    
+    override void update_thermo_from_ps(GasState Q, double s)
+    {
+	assert(0, "Implement me");
+    }
+    
+    override void update_thermo_from_hs(GasState Q, double h, double s)
+    {
+	assert(0, "Implement me");
+    }
+    
+
+    override void update_sound_speed(GasState Q) const
+    {
+		this._IAPWS.p = Q.p;
+		this._IAPWS.T = Q.Ttr;
+		this._IAPWS.update_thermo();
+		Q.a = this._IAPWS.a;
+    }
+
+    override void update_trans_coeffs(GasState Q) const
+    {
+		_IAPWS.p = Q.p;
+		_IAPWS.T = Q.Ttr;
+		_IAPWS.update_thermo();
+		Q.mu = _IAPWS.mu;
+		Q.k = _IAPWS.k;
+    }
+
+    override double dudT_const_v(in GasState Q) const
+    {
+		_IAPWS.p = Q.p;
+		_IAPWS.T = Q.Ttr;
+		_IAPWS.update_thermo();
+		return _IAPWS.Cv;
+    }
+    override double dhdT_const_p(in GasState Q) const
+    {
+		_IAPWS.p = Q.p;
+		_IAPWS.T = Q.Ttr;
+		_IAPWS.update_thermo();
+		return _IAPWS.Cp;
+    }
+    override double dpdrho_const_T(in GasState Q) const
+    {
+		return 0.0;
+    }
+    override double gas_constant(in GasState Q) const
+    {
+    	return R;
+    }
+    override double internal_energy(in GasState Q) const
+    {
+    	_IAPWS.p = Q.p;
+		_IAPWS.T = Q.Ttr;
+		_IAPWS.update_thermo();
+    	return _IAPWS.u;
+    }
+    override double enthalpy(in GasState Q) const
+    {
+    	_IAPWS.p = Q.p;
+		_IAPWS.T = Q.Ttr;
+		_IAPWS.update_thermo();
+    	return _IAPWS.h;
+    }
+    override double entropy(in GasState Q) const
+    {
+    	_IAPWS.p = Q.p;
+		_IAPWS.T = Q.Ttr;
+		_IAPWS.update_thermo();
+    	return _IAPWS.s;
+    }
+} // end class Steam
+
+version(steam_test){
+    import std.stdio;
+    import util.msg_service;
+
+    int main(){
+	auto gm = new Steam();
+	auto gd = new GasState(1, 0);
+	gd.p = 1.0e5;
+	gd.Ttr = 600.0;
+	gd.massf[0] = 1.0;
+	gd.quality = 1.0;
+	assert(approxEqual(gm.R(gd), 461.5, 1.0e-4), failedUnitTest());
+	assert(gm.n_modes == 0, failedUnitTest());
+	assert(gm.n_species == 1, failedUnitTest());
+	assert(approxEqual(gd.p, 1.0e5, 1.0e-6), failedUnitTest());
+	assert(approxEqual(gd.Ttr, 600.0, 1.0e-6), failedUnitTest());
+	assert(approxEqual(gd.massf[0], 1.0, 1.0e-6), failedUnitTest());
+
+	gm.update_thermo_from_pT(gd);
+	gm.update_sound_speed(gd);
+	
+	/*
+	*Reference:
+	*		Zittau´s Fluid Property Calculator 
+	*		(https://web1.hszg.de/thermo_fpc/index.php)
+	*		University of Applied Sciences faculty of Mechanical
+	*		Engineering
+	*		Department of Technical Thermodynamics
+	*/
+	//gd.rho = 5.0;
+	//gd.u = 2.8e6;
+	//gm.update_thermo_from_rhou(gd);
+	//assert(approxEqual(1298110.3, gd.p, 1.0e-6), failedUnitTest());
+	//assert(approxEqual(580.408, gd.Ttr, 1.0e-6), failedUnitTest());
+
+	/*
+	*Reference:
+	*	 Wanger, W., & Kretzschmar, H.(2008). International Steam Tables.
+    *	 Berlin, Heidelberg: Springer Berlin Heidelberg.
+    *	 table 2.11
+	*/
+	gd.p = 0.0035e6;
+	gd.Ttr = 300;
+	gm.update_thermo_from_pT(gd);
+	assert(approxEqual(1./0.394913866e2,gd.rho, 1.0e-6),failedUnitTest());
+	assert(approxEqual(0.241169160e7, gm.internal_energy(gd), 1.0e1), failedUnitTest());
+	assert(approxEqual(0.254991145e7, gm.enthalpy(gd), 1.0e1), failedUnitTest());
+	assert(approxEqual(0.852238967e4, gm.entropy(gd), 1.0e-2), failedUnitTest());
+	assert(approxEqual(0.191300162e4, gm.dhdT_const_p(gd), 1.0e-2), failedUnitTest());
+	assert(approxEqual(0.144132662e4, gm.dhdT_const_v(gd), 1.0e-2), failedUnitTest());
+	gm.update_sound_speed(gd);
+	assert(approxEqual(0.427940172e3, gd.a, 1.0e-3), failedUnitTest());
+	
+	/*
+	*Reference:
+	*	 IAPWS release R15-11 table 8. 
+	*/
+	gd.p = 0.1e6;
+	gd.Ttr = 650;
+	gm.update_trans_coeffs(gd);
+	assert(approxEqual(0.522311024e-1, gd.k, 1.0e-7), failedUnitTest());
+	assert(approxEqual(0.234877453e-4, gd.k, 1.0e-9), failedUnitTest());	
+	return 0;
+    }
 }
