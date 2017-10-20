@@ -1701,9 +1701,10 @@ public:
 } // end class IAPWS
 
 
-//local update function 
-double update_from_rhou(double rho, double u, double quality)
+//local function to iterate a guess of (p, T) to match (rho, u)  
+double[] getpT_from_rhou(double rho, double u, double quality)
 {
+/**/File logs=File("getpT_from_rhou.txt", "w"); 
 	//local thermal update method for (rho,u)
 	//a guess of p & T is iterated on update_thermo_from_pT using 
 	//the  Newton-Raphson method.
@@ -1716,13 +1717,13 @@ double update_from_rhou(double rho, double u, double quality)
 	int converged, count;
 
 	immutable MAX_RELATIVE_STEP = 0.1;
-	immutable MAX_STEPS = 30;
+	immutable MAX_STEPS = 200;
 
 	// When using single-sided finite-differences on the
 	// curve-fit EOS functions, we really cannot expect 
 	// much more than 0.1% tolerance here.
 	// However, we want a tighter tolerance so that the starting values
-	// don't get shifted noticeably.
+	// don't get shifted noticeably (according to gas_model.d).
  
 	double fu_tol = 1.0e-6 * u;
 	double frho_tol = 1.0e-6 * rho;
@@ -1732,16 +1733,18 @@ double update_from_rhou(double rho, double u, double quality)
 	// Get an idea of the gas properties by calling the pT
 	// equation of state with some dummy values for pressure
 	// and thermal temperature. the iteration start from vapour phase
-	double p = 1.0; // [Pa] 
-	double T = 273.15; // [k] 
-	IAPWS _IAPWS = new IAPWS(p,T,1);
+	p_old = 1.0e4; // [Pa] 
+	T_old = 523.15; // [k] 
+	IAPWS _IAPWS = new IAPWS(p_old,T_old,1);
     
-	double u_old = _IAPWS.u;
-	R_eff = p / (rho * u_old);
-	dT = 0.01 * T;
-	T += dT;
+	double u_old = _IAPWS.u; 
+	R_eff = p_old / (_IAPWS.rho * u);
+	dT = 0.01 * T_old;
+	T_old += dT;
+	logs.writeln("p_old:",p_old," T_old:", T_old, " rho:", _IAPWS.rho,
+			" u:", _IAPWS.u);
 
-/**/try { IAPWS _IAPWS_1 = new IAPWS(p,T,1);}
+	try { _IAPWS = new IAPWS(p_old,T_old,1);}
 	catch (Exception caughtException) {
 	    string msg;
 	    msg ~= format("Starting guess at iteration 1 failed in %s\n", __FUNCTION__);
@@ -1750,16 +1753,13 @@ double update_from_rhou(double rho, double u, double quality)
 	    throw new Exception(msg);
 	}
 
-
 	Cv_eff = (_IAPWS.u - u_old) / dT;
 	// Now, get a better guess for the appropriate pressure and
 	// thermal temperature.
-/*6*/p_old = R_eff * rho * T_old;    
-	T_old = (u - _IAPWS.u)/Cv_eff + T;
-
+/*6*/p_old = R_eff * (rho- _IAPWS.rho) * T_old + p_old;    
+	T_old = (u - _IAPWS.u)/Cv_eff + T_old;
 	// Evaluate state variables using this guess.
-
-	try { IAPWS _IAPWS = new IAPWS(p_old,T_old,1); }
+	try { _IAPWS = new IAPWS(p_old,T_old,1); }
 	catch (Exception caughtException) {
 	    string msg;
 	    msg ~= format("Starting guess at iteration 2 failed in %s\n", __FUNCTION__);
@@ -1767,9 +1767,11 @@ double update_from_rhou(double rho, double u, double quality)
 	    msg ~= to!string(caughtException);
 	    throw new Exception(msg);
 	}
-
 	frho_old = rho - _IAPWS.rho;
 	fu_old = u - _IAPWS.u;
+	logs.writeln("p_old:",p_old," T_old:", T_old, " rho:", _IAPWS.rho,
+			" u:", _IAPWS.u," frho_old:", frho_old," fu_old:", fu_old);
+
 	// Update the guess using Newton iterations
 	// with the partial derivatives being estimated
 	// via finite differences.
@@ -1779,7 +1781,7 @@ double update_from_rhou(double rho, double u, double quality)
 	    // Perturb first dimension to get derivatives.
 	    p_new = p_old * 1.0001;
 	    T_new = T_old;
-	    try { IAPWS _IAPWS = new IAPWS(p_new,T_new,1); }
+	    try { _IAPWS = new IAPWS(p_new,T_new,1); }
 	    catch (Exception caughtException) {
 		string msg;
 		msg ~= format("Iteration %s failed at call A in %s\n", count, __FUNCTION__); 
@@ -1795,7 +1797,7 @@ double update_from_rhou(double rho, double u, double quality)
 	    p_new = p_old;
 	    T_new = T_old * 1.0001;
 
-	    try { IAPWS _IAPWS = new IAPWS(p_new,T_new,1); }
+	    try { _IAPWS = new IAPWS(p_new,T_new,1); }
 	    catch (Exception caughtException) {
 		string msg;
 		msg ~= format("Iteration %s failed at call B in %", count, __FUNCTION__);
@@ -1805,7 +1807,7 @@ double update_from_rhou(double rho, double u, double quality)
 	    }
 
 	    frho_new = rho - _IAPWS.rho;
-	    fu_new = u - Q.u;
+	    fu_new = u - _IAPWS.u;
 	    dfrho_dT = (frho_new - frho_old) / (T_new - T_old);
 	    dfu_dT = (fu_new - fu_old) / (T_new - T_old);
 	    //Jacobian matrix determinant 
@@ -1831,7 +1833,7 @@ double update_from_rhou(double rho, double u, double quality)
 	    p_old += dp;
 	    T_old += dT;
 	    // Make sure of consistent thermo state.
-	    try { IAPWS _IAPWS = new IAPWS(p_old,T_old,1); }
+	    try { _IAPWS = new IAPWS(p_old,T_old,1); }
 	    catch (Exception caughtException) {
 		string msg;
 		msg ~= format("Iteration %s failed in %s\n", count, __FUNCTION__);
@@ -1844,6 +1846,9 @@ double update_from_rhou(double rho, double u, double quality)
 	    fu_old = u - _IAPWS.u;
 	    converged = (fabs(frho_old) < frho_tol) && (fabs(fu_old) < fu_tol);
 	    ++count;
+
+	    logs.writeln("p_old:",p_old," T_old:", T_old, " rho:", _IAPWS.rho,
+			" u:", _IAPWS.u," frho_old:", frho_old," fu_old:", fu_old," i:", count);
 	} // end while 
 
 	if ( count >= MAX_STEPS ) {
@@ -1852,7 +1857,6 @@ double update_from_rhou(double rho, double u, double quality)
 	    msg ~= format("    Iterations did not converge.\n");
 	    msg ~= format("    frho_old = %g, fu_old = %g\n", frho_old, fu_old);
 	    msg ~= format("    rho = %.10s, u, %.5s\n", rho, u); 
-	    msg ~= format("	   solution might be in liquid-vapour mixture state.\n");
 	    writeln(msg);
 
 	}
@@ -1863,13 +1867,16 @@ double update_from_rhou(double rho, double u, double quality)
 	    msg ~= format("    Iterations failed badly.\n");
 	    msg ~= format("    rho = %.10s, u, %.5s\n", rho, u); 
 	    msg ~= format("    frho_old = %g, fu_old = %g\n", frho_old, fu_old);
-	    msg ~= format("	   solution might across saturation boundary.\n");
 	    throw new Exception(msg);
 	}
+
+	logs.close();
+	return [p_old, T_old];
 }
 
 void main()
 {
 	IAPWS test = new IAPWS(10e6,310.9995+273.15,-1);
 	writefln("%.12f",1/test.rho);
+	getpT_from_rhou(5,2800e3,1);
 }
