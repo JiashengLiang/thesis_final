@@ -177,7 +177,7 @@ private:
 		double sum_pi=0;
 		double sum_pipi=0;
 		double sum_pitau=0;
-		for (int i=0; i<43; i++){
+		foreach (i; 0 .. 43){
 		    sum += table_2_7[i][2]*((pi)^^(table_2_7[i][0]))
 			*((tau-0.5)^^(table_2_7[i][1]));
 		    sum_tau += table_2_7[i][2]*((pi)^^(table_2_7[i][0]))
@@ -209,7 +209,7 @@ private:
 		double sum_tautau=0;
 		table_2_6[0][1] = -0.96937268393049e1;
 		table_2_6[1][1] = 0.10087275970006e2;
-		for (int i=0; i<9; i++){
+		foreach (i; 0 .. 9){
 		    sum += table_2_6[i][1]*(tau^^table_2_6[i][0]);
 		    sum_tau += table_2_6[i][1]*table_2_6[i][0]*(tau)^^(table_2_6[i][0]-1);
 		    sum_tautau += table_2_6[i][1]*table_2_6[i][0]*(table_2_6[i][0]-1)
@@ -230,7 +230,7 @@ private:
 		double sum_pi=0;
 		double sum_pipi=0;
 		double sum_pitau=0;
-		for (int i=0; i<13; i++){
+		foreach (i; 0 .. 13){
 		    sum += table_2_12[i][2]*((pi)^^(table_2_12[i][0]))
 			*((tau-0.5)^^(table_2_12[i][1]));
 		    sum_tau += table_2_12[i][2]*((pi)^^(table_2_12[i][0]))
@@ -341,7 +341,7 @@ private:
 	double sum=0;
 	double sum_tau=0;
 	double sum_tautau=0;
-	for (int i=0;i<6;i++){
+	foreach (i; 0 .. 6){
 	    sum += table_2_22[i][1]*(tau^^table_2_22[i][0]);
 	    sum_tau += table_2_22[i][1]*table_2_22[i][0]*(tau)^^(table_2_22[i][0]-1);
 	    sum_tautau += table_2_22[i][1]*table_2_22[i][0]*(table_2_22[i][0]-1)
@@ -361,7 +361,7 @@ private:
 	double sum_pi=0;
 	double sum_pipi=0;
 	double sum_pitau=0;
-	for (int i=0; i<6; i++){
+	foreach (i; 0 .. 6){
 	    sum += table_2_23[i][2]*((pi)^^(table_2_23[i][0]))*((tau)^^(table_2_23[i][1]));
 	    sum_tau += table_2_23[i][2]*((pi)^^(table_2_23[i][0]))
 		*((tau)^^(table_2_23[i][1]-1))*table_2_23[i][1];
@@ -1164,7 +1164,7 @@ private:
 	//summation container for for loop
 	double sum=0,sum_tau=0,sum_delta=0,sum_tautau=0,sum_deltadelta=0,sum_deltatau=0;
 	//table 2.17
-	for(int i=1; i<40; ++i){
+	foreach(i; 0 .. 40){
 	    sum += table_2_15[i][2]*delta^^table_2_15[i][0]*tau^^table_2_15[i][1];
 	    sum_tau += table_2_15[i][2]*delta^^table_2_15[i][0]
 		*tau^^(table_2_15[i][1]-1)*table_2_15[i][1];
@@ -1264,7 +1264,7 @@ private:
 	tau=1386/T;
 
 	//table 2.4, derivatives of gamma
-	for (int i=0;i<34;i++){
+	foreach (i; 0 .. 34){
 	    gamma += table_2_2[2][i]*(7.1-pi)^^table_2_2[0][i]*(tau-1.222)^^table_2_2[1][i];
 	    gamma_tau += table_2_2[2][i]*(7.1-pi)^^table_2_2[0][i]*(tau-1.222)^^
 		(table_2_2[1][i]-1)*table_2_2[1][i];
@@ -2016,7 +2016,7 @@ public:
 //			(inspired by fill-in functions in gas_model.d)
 //---------------------------------------------------------------------------------
 
-double[] getpT_from_rhou(double rho, double u, double quality)
+double[] getpT_from_rhou(double rho, double u)
 { 
 	//local thermal update method for (rho,u)
 	//a guess of p & T is iterated on update_thermo_from_pT using 
@@ -2050,17 +2050,15 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	T_old = 523.15; // [k] 
 	IAPWS _IAPWS = new IAPWS();
 	_IAPWS.p = p_old; _IAPWS.T = T_old;_IAPWS.quality=1;
-	_IAPWS.set_region;
-	_IAPWS.update_u;_IAPWS.update_rho;
-    
+	_IAPWS.set_region; _IAPWS.update_u; _IAPWS.update_rho;
+     
 	double u_old = _IAPWS.u; 
 	R_eff = p_old / (_IAPWS.rho * u);
 	dT = 0.01 * T_old;
 	T_old += dT;
 
 	_IAPWS.p = p_old; _IAPWS.T = T_old;_IAPWS.quality=1;
-	_IAPWS.set_region;
-	try { _IAPWS.update_u;_IAPWS.update_rho;}
+	try { _IAPWS.set_region; _IAPWS.update_u; _IAPWS.update_rho;}
 	catch (Exception caughtException) {
 	    string msg;
 	    msg ~= format("Starting guess at iteration 1 failed in %s\n", __FUNCTION__);
@@ -2075,7 +2073,8 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 /*6*/p_old = R_eff * (rho- _IAPWS.rho) * T_old + p_old;    
 	T_old = (u - _IAPWS.u)/Cv_eff + T_old;
 	// Evaluate state variables using this guess.
-	try { _IAPWS = new IAPWS(p_old,T_old,1); }
+	_IAPWS.p = p_old; _IAPWS.T = T_old;
+	try { _IAPWS.set_region; _IAPWS.update_u; _IAPWS.update_rho;}
 	catch (Exception caughtException) {
 	    string msg;
 	    msg ~= format("Starting guess at iteration 2 failed in %s\n", __FUNCTION__);
@@ -2095,7 +2094,8 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	    // Perturb first dimension to get derivatives.
 	    p_new = p_old * 1.0001;
 	    T_new = T_old;
-	    try { _IAPWS = new IAPWS(p_new,T_new,1); }
+	    _IAPWS.p = p_new; _IAPWS.T = T_new;
+		try { _IAPWS.set_region; _IAPWS.update_u; _IAPWS.update_rho;}
 	    catch (Exception caughtException) {
 		string msg;
 		msg ~= format("Iteration %s failed at call A in %s\n", count, __FUNCTION__); 
@@ -2107,11 +2107,12 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	    fu_new = u - _IAPWS.u;
 	    dfrho_dp = (frho_new - frho_old) / (p_new - p_old);
 	    dfu_dp = (fu_new - fu_old) / (p_new - p_old);
+
 	    // Perturb other dimension to get derivatives.
 	    p_new = p_old;
 	    T_new = T_old * 1.0001;
-
-	    try { _IAPWS = new IAPWS(p_new,T_new,1); }
+	    _IAPWS.p = p_new; _IAPWS.T = T_new;
+		try { _IAPWS.set_region; _IAPWS.update_u; _IAPWS.update_rho;}
 	    catch (Exception caughtException) {
 		string msg;
 		msg ~= format("Iteration %s failed at call B in %", count, __FUNCTION__);
@@ -2147,7 +2148,8 @@ double[] getpT_from_rhou(double rho, double u, double quality)
 	    p_old += dp;
 	    T_old += dT;
 	    // Make sure of consistent thermo state.
-	    try { _IAPWS = new IAPWS(p_old,T_old,1); }
+	    _IAPWS.p = p_old; _IAPWS.T = T_old;
+		try { _IAPWS.set_region; _IAPWS.update_u; _IAPWS.update_rho;}
 	    catch (Exception caughtException) {
 		string msg;
 		msg ~= format("Iteration %s failed in %s\n", count, __FUNCTION__);
