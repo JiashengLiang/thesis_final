@@ -2203,6 +2203,7 @@ public:
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		Q.rho = _IAPWS.Density;
 		Q.a = _IAPWS.SoundSpeed;
 		Q.u = _IAPWS.SpecificInternalEnergy;
@@ -2217,6 +2218,7 @@ public:
 			double[2] pT = getpT_from_rhou(Q.rho, Q.u);
 			Q.p = pT[0];
 			Q.Ttr = pT[1];
+			_IAPWS.quality = Q.quality;
 			_IAPWS.p = pT[0];
 			_IAPWS.T = pT[1];
 			Q.a = _IAPWS.SoundSpeed;
@@ -2254,6 +2256,7 @@ public:
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		Q.a = _IAPWS.SoundSpeed;
     }
 
@@ -2261,6 +2264,7 @@ public:
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		Q.mu = _IAPWS.DynamicViscosity;
 		Q.k = _IAPWS.ThermalConductivity;
     }
@@ -2269,12 +2273,14 @@ public:
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		return _IAPWS.SpecificIsochoricHeatCapacity;
     }
     override double dhdT_const_p(in GasState Q)
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		return _IAPWS.SpecificIsobaricHeatCapacity;
     }
     override double dpdrho_const_T(in GasState Q)
@@ -2300,18 +2306,21 @@ public:
 		//return _IAPWS.u;
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		return _IAPWS.SpecificInternalEnergy;
     }
     override double enthalpy(in GasState Q)
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		return _IAPWS.SpecificEnthalpy;
     }
     override double entropy(in GasState Q)
     {
 		_IAPWS.p = Q.p;
 		_IAPWS.T = Q.Ttr;
+		_IAPWS.quality = Q.quality;
 		return _IAPWS.SpecificEntropy;
     }
 } // end class Steam
