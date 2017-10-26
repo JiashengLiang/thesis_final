@@ -1,4 +1,5 @@
---Validation Eilmer4 Input file for Gasmodel Steam
+--Steam GasModel: Validation Eilmer4 Input file for Gasmodel Steam
+
 --Validated Lua GasModel functions:
 -- 		-updateThermoFromPT
 -- 		-updateThermoFromRHOU
