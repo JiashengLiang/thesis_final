@@ -1986,20 +1986,6 @@ double[] getpT_from_rhou(double rho, double u)
 	immutable MAX_RELATIVE_STEP = 0.1;
 	immutable MAX_STEPS = 200;
 
-	//local function to automatically fix the update pressure 
-	//under saturation pressure
-	double p_under_sat(double p, double T)
-	{
-		if(p>=get_ps(T))
-		{
-			return get_ps(T);
-		}
-		else
-		{
-			return p;
-		}
-	}
-
 	// When using single-sided finite-differences on the
 	// curve-fit EOS functions, we really cannot expect 
 	// much more than 0.1% tolerance here.
@@ -2014,18 +2000,8 @@ double[] getpT_from_rhou(double rho, double u)
 	// Get an idea of the gas properties by calling the pT
 	// equation of state with some dummy values for pressure
 	// and thermal temperature. the iteration start from vapour phase
-	if(rho<=5 && (2500e3<=u && u<=2700e3))
-	{
-		//when the input (rho,u) is in the ideal gas region
-		//a guess closer to this region is required 
-		p_old = 50; // [Pa]
-		T_old = 323.15; //[Pa]
-	}
-	else
-	{
-		p_old = 1.0e4; // [Pa] 
-		T_old = 523.15; // [k]
-	}
+	p_old = 1.0e4; // [Pa] 
+	T_old = 523.15; // [k]
 	auto _IAPWS = new IAPWS(); 
       
 	u_old = _IAPWS.SpecificInternalEnergy(p_old,T_old,1);
@@ -2034,7 +2010,7 @@ double[] getpT_from_rhou(double rho, double u)
 	dT = 0.01 * T_old;
 	T_old += dT;
 
-	p_old = p_under_sat(p_old,T_old);
+	
 	try { u_new = _IAPWS.SpecificInternalEnergy(p_old,T_old,1);
 	rho_new = _IAPWS.Density(p_old,T_old,1);}
 	catch (Exception caughtException) {
@@ -2050,7 +2026,6 @@ double[] getpT_from_rhou(double rho, double u)
 	p_old = R_eff * (rho- rho_new) * T_old + p_old;    
 	T_old = (u - u_new)/Cv_eff + T_old;
 	// Evaluate state variables using this guess.
-	p_old = p_under_sat(p_old,T_old);
 	try { u_new = _IAPWS.SpecificInternalEnergy(p_old,T_old,1);
 	rho_new = _IAPWS.Density(p_old,T_old,1);}
 	catch (Exception caughtException) {
@@ -2072,7 +2047,6 @@ double[] getpT_from_rhou(double rho, double u)
 	    // Perturb first dimension to get derivatives.
 	    p_new = p_old * 1.0001;
 	    T_new = T_old;
-	    p_new = p_under_sat(p_new,T_new);
 		try { u_new = _IAPWS.SpecificInternalEnergy(p_new, T_new,1);
 		rho_new = _IAPWS.Density(p_new, T_new,1);}
 	    catch (Exception caughtException) {
@@ -2090,7 +2064,6 @@ double[] getpT_from_rhou(double rho, double u)
 	    // Perturb other dimension to get derivatives.
 	    p_new = p_old;
 	    T_new = T_old * 1.0001;
-	    p_new = p_under_sat(p_new,T_new);
 		try { u_new = _IAPWS.SpecificInternalEnergy(p_new, T_new, 1);
 		rho_new = _IAPWS.Density(p_new, T_new,1);}
 	    catch (Exception caughtException) {
@@ -2127,7 +2100,6 @@ double[] getpT_from_rhou(double rho, double u)
 	    p_old += dp;
 	    T_old += dT;
 	    // Make sure of consistent thermo state.
-	    p_old = p_under_sat(p_old,T_old);
 		try { u_new = _IAPWS.SpecificInternalEnergy(p_old, T_old,1);
 		rho_new = _IAPWS.Density(p_old, T_old,1);}
 	    catch (Exception caughtException) {
