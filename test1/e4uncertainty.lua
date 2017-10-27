@@ -5,7 +5,6 @@ gmodel = GasModel:new{'steam.lua'}
 Q = GasState:new{gmodel}
 Q.quality = 1 --> assume always in gas phase
 
-file = io.open("updateThermoFromRHOU.txt","w")
 p_data = io.open("p.txt","r")
 T_data = io.open("T.txt","r")
 
@@ -18,6 +17,7 @@ end
 for _T in T_data:lines() do
 	table.insert(T_list,tonumber(_T))
 end
+p_data:close(); T_data:close()
 
 -- lists of properties calculated by updateThermoFromPT
 rho_list={}; u_list={}; h_list={}; s_list={}; Cp_list={} 
@@ -55,7 +55,7 @@ for i_rho in pairs(rho_list) do
 	gmodel:updateThermoFromRHOU(Q)
 	gmodel:updateSoundSpeed(Q)
 	gmodel:updateTransCoeffs(Q)
-	table.insert(p_list_1, Q.rho)
+	table.insert(p_list_1, Q.p)
 	table.insert(T_list_1, Q.T)
 	table.insert(h_list_1, gmodel:enthalpy(Q))
 	table.insert(s_list_1, gmodel:entropy(Q))
@@ -66,19 +66,98 @@ for i_rho in pairs(rho_list) do
 	table.insert(k_list_1, Q.k)
 end
 
-print(rho_list[1000]," ", u_list[1000]," ",p_list_1[1000]," ", T_list_1[1000]," ", h_list_1[1000]," ", s_list_1[1000]," ", Cp_list_1[1000]," ", Cv_list_1[1000]," ", a_list_1[1000]," ", mu_list_1[1000]," ", k_list_1[1000])
+--write the data to txt file
+p_txt = io.open("uncertainty_p.txt","w")
+p_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(p_list) do
+	p_txt:write(p_list[i],"	 ",p_list_1[i],"  ",
+	       math.abs(p_list[i]-p_list_1[i]),"  ",
+	       100*math.abs((p_list[i]-p_list_1[i])/p_list[i]),"\n")
+end
+p_txt:close()
+
+T_txt = io.open("uncertainty_T.txt","w")
+T_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(T_list) do
+	T_txt:write(T_list[i],"	 ",T_list_1[i],"  ",
+	       math.abs(T_list[i]-T_list_1[i]),"  ",
+	       100*math.abs((T_list[i]-T_list_1[i])/T_list[i]),"\n")
+end
+T_txt:close()
+
+h_txt = io.open("uncertainty_h.txt","w")
+h_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(h_list) do
+	h_txt:write(h_list[i],"	 ",h_list_1[i],"  ",
+	       math.abs(h_list[i]-h_list_1[i]),"  ",
+	       100*math.abs((h_list[i]-h_list_1[i])/h_list[i]),"\n")
+end
+h_txt:close()
+
+s_txt = io.open("uncertainty_s.txt","w")
+s_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(s_list) do
+	s_txt:write(s_list[i],"	 ",s_list_1[i],"  ",
+	       math.abs(s_list[i]-s_list_1[i]),"  ",
+	       100*math.abs((s_list[i]-s_list_1[i])/s_list[i]),"\n")
+end
+s_txt:close()
+
+Cp_txt = io.open("uncertainty_Cp.txt","w")
+Cp_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(Cp_list) do
+	Cp_txt:write(Cp_list[i],"  ",Cp_list_1[i],"  ",
+	       math.abs(Cp_list[i]-Cp_list_1[i]),"  ",
+	       100*math.abs((Cp_list[i]-Cp_list_1[i])/Cp_list[i]),"\n")
+end
+Cp_txt:close()
+
+Cv_txt = io.open("uncertainty_Cv.txt","w")
+Cv_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(Cv_list) do
+	Cv_txt:write(Cv_list[i],"  ",Cv_list_1[i],"  ",
+	       math.abs(Cv_list[i]-Cv_list_1[i]),"  ",
+	       100*math.abs((Cv_list[i]-Cv_list_1[i])/Cv_list[i]),"\n")
+end
+Cv_txt:close()
+
+a_txt = io.open("uncertainty_a.txt","w")
+a_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(a_list) do
+	a_txt:write(a_list[i],"	 ",a_list_1[i],"  ",
+	       math.abs(a_list[i]-a_list_1[i]),"  ",
+	       100*math.abs((a_list[i]-a_list_1[i])/a_list[i]),"\n")
+end
+a_txt:close()
+
+mu_txt = io.open("uncertainty_mu.txt","w")
+mu_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(mu_list) do
+	mu_txt:write(mu_list[i],"  ",mu_list_1[i],"  ",
+	       math.abs(mu_list[i]-mu_list_1[i]),"  ",
+	       100*math.abs((mu_list[i]-mu_list_1[i])/mu_list[i]),"\n")
+end
+mu_txt:close()
+
+k_txt = io.open("uncertainty_k.txt","w")
+k_txt:write("updateThermoFromPT ", " updateThermoFromRHOU",
+	"  difference","  percentage","\n")
+for i in pairs(k_list) do
+	k_txt:write(k_list[i],"	 ",k_list_1[i],"  ",
+	       math.abs(k_list[i]-k_list_1[i]),"  ",
+	       100*math.abs((k_list[i]-k_list_1[i])/k_list[i]),"\n")
+end
+k_txt:close()
 
 
-Q.p = 0.0035e6 
-Q.T= 300.0 
-Q.quality = 1
-print("--1. updateThermoFromPT:")
-gmodel:updateThermoFromPT(Q)
-print("Temperature [K]=",Q.T,"Pressure [Pa]=",Q.p,"quality=",Q.quality)
-print("Density [kg/m3]=", Q.rho, "Interal Energy [J/kg]=", Q.u, "Sound Speed [m/s]=",
-	 Q.a,"\n")
-file:write("Density [kg/m3]=")
-file:close()
 
 
 
