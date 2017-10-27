@@ -22,14 +22,14 @@ Q.quality = 1
 print("--1. updateThermoFromPT:")
 gmodel:updateThermoFromPT(Q)
 print("Temperature [K]=",Q.T,"Pressure [Pa]=",Q.p,"quality=",Q.quality)
-print("Density [kg/m3]=", Q.rho, "Interal Energy [J/kg]=", Q.u, "Sound Speed [m/s]=",
+print("Density [kg/m3]=", Q.rho, " Specific Interal Energy [J/kg]=", Q.u, " Sound Speed [m/s]=",
 	 Q.a,"\n")
 
 Q.rho = 5.0
 Q.u = 2.8e6
 print("--2. updateThermoFromRHOU:")
 gmodel:updateThermoFromRHOU(Q)
-print("Density [kg/m3]=",Q.rho," Interal Energy [J/kg]=",Q.u," quality=",
+print("Density [kg/m3]=",Q.rho," Specific Interal Energy [J/kg]=",Q.u," quality=",
 		Q.quality)
 print("Temperature [K]=",Q.T,"Pressure [Pa]=",Q.p,"\n")
 
