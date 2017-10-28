@@ -2220,7 +2220,10 @@ void good_T(double p, ref double T)
 	if(T<273.15){T = 273.15;}
 	else if((273.15<T && T<=623.15) && p>get_ps(T) )
 	{
-		T = 1.001*get_Ts(p);
+		while(p>get_ps(T))
+		{
+			T = get_Ts(p)+0.01;
+		}
 	}
 	else if((623.15<T && T<=863.15) && p>get_pb23(T)) 
 	{

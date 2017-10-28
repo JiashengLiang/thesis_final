@@ -1975,7 +1975,7 @@ public:
 //			(inspired by fill-in functions in gas_model.d)
 //---------------------------------------------------------------------------------
 
-//local function to automatically check and alter the update (p,T) to ensure it is 
+//local function to automatically check and fix the update (p,T) to ensure it is 
 //in either Region 2 or Region 5 
 void good_pT(ref double p, ref double T)
 {
@@ -1992,13 +1992,12 @@ void good_pT(ref double p, ref double T)
 	{
 		p = 100e6;
 	}
-	else if((1073.15<T && T<=2273.15) && p>100e6)
+	else if((1073.15<T && T<=2273.15) && p>50e6)
 	{
-		p = 100e6;
+		p = 50e6;
 	}
 	else if(T>2273.15){T=2273.15;}
 }
-
 double[] getpT_from_rhou(double rho, double u)
 { 
 	//local thermal update method for (rho,u)
@@ -2014,6 +2013,30 @@ double[] getpT_from_rhou(double rho, double u)
 
 	immutable MAX_RELATIVE_STEP = 0.1;
 	immutable MAX_STEPS = 300;
+
+	//local function to automatically check and fix the update 
+	//(p,T) to ensure it is in either Region 2 or Region 5 
+	void good_pT(ref double p, ref double T)
+	{
+		if(T<273.15){T = 273.15;}
+		else if((273.15<T && T<=623.15) && p>get_ps(T) )
+		{
+			p = get_ps(T);
+		}
+		else if((623.15<T && T<=863.15) && p>get_pb23(T)) 
+		{
+			p = get_pb23(T);
+		}
+		else if((863.15<T && T<=1073.15) && p>100e6)
+		{
+			p = 100e6;
+		}
+		else if((1073.15<T && T<=2273.15) && p>100e6)
+		{
+			p = 100e6;
+		}
+		else if(T>2273.15){T=2273.15;}
+	}
 
 	// When using single-sided finite-differences on the
 	// curve-fit EOS functions, we really cannot expect 
@@ -2197,7 +2220,10 @@ void good_T(double p, ref double T)
 	if(T<273.15){T = 273.15;}
 	else if((273.15<T && T<=623.15) && p>get_ps(T) )
 	{
-		T = 1.001*get_Ts(p);
+		while(p>get_ps(T))
+		{
+			T = get_Ts(p)+0.01;
+		}
 	}
 	else if((623.15<T && T<=863.15) && p>get_pb23(T)) 
 	{
@@ -2206,6 +2232,11 @@ void good_T(double p, ref double T)
 			T*=1.001;
 		}
 	}
+	else if((1073.15<T && T<=2273.15) && p>50e6)
+	{
+		T = 1073.15;
+	}
+	else if(T>2273.15){T=2273.15;}
 }
 
 double getT_from_ps(double p, double T0, double s)
@@ -2306,14 +2337,14 @@ double getT_from_ps(double p, double T0, double s)
 
 void main()
 {
-	double p=0.0035e6;
-	double T=380;
+	double p=2855;
+	double T=296.4131286662;
 	double quality=-1;
 	double rho = 5.0;
 	double u = 2.8e6;
-	double s = 0.852238967e4;
+	double s = 8594.235252;
 	auto _IAPWS = new IAPWS();
 	//writefln("%.12f %.12f",_IAPWS.Density(p,T,quality),_IAPWS.SpecificInternalEnergy(p,T,quality));
 	//writefln("%.12f %.12f",getpT_from_rhou(rho,u)[0],getpT_from_rhou(rho,u)[1]);
-	writefln("%.8f", getT_from_ps(p,380,s));
+	writefln("%.8f", getT_from_ps(p,T,s));
 }
